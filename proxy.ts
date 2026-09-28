@@ -5,11 +5,14 @@ const ROLE_ROUTE_MAP: Record<string, string[]> = {
   '/manager/board': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER'],
   '/manager': ['ADMIN', 'MANAGER'],
   '/dashboard': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER', 'CUSTOMER'],
+  '/profile': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER', 'CUSTOMER'],
+  '/book': ['CUSTOMER'],
+  '/bookings': ['CUSTOMER'],
 }
 
 const SESSION_COOKIE = 'session'
 
-const STAFF_ROUTES = ['/dashboard', '/admin', '/manager', '/profile']
+const PROTECTED_ROUTES = ['/dashboard', '/admin', '/manager', '/profile', '/book', '/bookings']
 const AUTH_ROUTES = [
   '/auth/customer/login',
   '/auth/staff/login',
@@ -20,7 +23,7 @@ const AUTH_ROUTES = [
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  const isStaffRoute = STAFF_ROUTES.some((r) => pathname.startsWith(r))
+  const isProtectedRoute = PROTECTED_ROUTES.some((r) => pathname.startsWith(r))
   const isAuthRoute = AUTH_ROUTES.some((r) => pathname.startsWith(r))
 
   const token = req.cookies.get(SESSION_COOKIE)?.value
@@ -34,23 +37,23 @@ export async function proxy(req: NextRequest) {
        return NextResponse.redirect(new URL('/auth/staff/change-password', req.url))
     }
     if (session.role === 'CUSTOMER') {
-      return NextResponse.redirect(new URL('/', req.url))
+      return NextResponse.redirect(new URL('/dashboard', req.url))
     }
     return NextResponse.redirect(new URL('/dashboard', req.url))
   }
 
   // Require authentication for protected routes
-  if (isStaffRoute && !session) {
+  if (isProtectedRoute && !session) {
     return NextResponse.redirect(new URL('/auth/staff/login', req.url))
   }
   
   // Enforce password change for staff
-  if (session?.mustChangePassword && isStaffRoute) {
+  if (session?.mustChangePassword && isProtectedRoute) {
     return NextResponse.redirect(new URL('/auth/staff/change-password', req.url))
   }
 
   // Role-based route guard
-  if (isStaffRoute && session) {
+  if (isProtectedRoute && session) {
     const sortedRoutes = Object.entries(ROLE_ROUTE_MAP).sort((a, b) => b[0].length - a[0].length);
     for (const [route, roles] of sortedRoutes) {
       if (pathname.startsWith(route)) {
@@ -71,6 +74,8 @@ export const config = {
     '/admin/:path*',
     '/manager/:path*',
     '/profile/:path*',
+    '/book/:path*',
+    '/bookings/:path*',
     '/auth/:path*',
   ],
 }

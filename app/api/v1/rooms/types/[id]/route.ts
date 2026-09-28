@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       resolvedParams.id,
       parsed
     );
-    return NextResponse.json(formatSuccessResponse(type, "Room type updated"));
+    return formatSuccessResponse(type, "Room type updated");
   } catch (error: any) {
     return NextResponse.json({ success: false, error: { message: error.message } }, { status: error.statusCode || 500 });
   }

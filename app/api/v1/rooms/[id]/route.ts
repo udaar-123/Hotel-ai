@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const resolvedParams = await params;
     const room = await RoomsService.getRoomById(resolvedParams.id);
-    return NextResponse.json(formatSuccessResponse(room));
+    return formatSuccessResponse(room);
   } catch (error: any) {
     return NextResponse.json({ success: false, error: { message: error.message } }, { status: error.statusCode || 500 });
   }
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       resolvedParams.id,
       parsed
     );
-    return NextResponse.json(formatSuccessResponse(room, "Room updated"));
+    return formatSuccessResponse(room, "Room updated");
   } catch (error: any) {
     return NextResponse.json({ success: false, error: { message: error.message } }, { status: error.statusCode || 500 });
   }

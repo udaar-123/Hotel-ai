@@ -28,7 +28,7 @@ model audit_logs {
 }
 
 model booking_guests {
-  id        String   @id
+  id        String   @id @default(uuid())
   bookingId String
   name      String
   email     String?
@@ -36,24 +36,39 @@ model booking_guests {
   bookings  bookings @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 }
 
+model identity_documents {
+  id           String   @id @default(uuid())
+  bookingId    String
+  url          String
+  publicId     String
+  documentType String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  bookings     bookings @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
 model bookings {
-  id             String           @id
-  hotelId        String
-  userId         String
-  roomId         String
-  checkInDate    DateTime
-  checkOutDate   DateTime
-  totalAmount    Float
-  status         String           @default("DRAFT")
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime
-  booking_guests booking_guests[]
-  hotels         hotels           @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  rooms          rooms            @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  users          users            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  checkins       checkins?
-  payments       payments?
-  service_orders service_orders[]
+  id               String               @id @default(uuid())
+  hotelId          String
+  userId           String
+  roomId           String
+  checkInDate      DateTime
+  checkOutDate     DateTime
+  totalAmount      Float
+  status           String               @default("PENDING_PAYMENT")
+  source           String               @default("ONLINE")
+  createdByStaffId String?
+  guestCount       Int                  @default(1)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  booking_guests   booking_guests[]
+  identity_docs    identity_documents[]
+  hotels           hotels               @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  rooms            rooms                @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  users            users                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkins         checkins?
+  payments         payments?
+  service_orders   service_orders[]
 }
 
 model chat_sessions {

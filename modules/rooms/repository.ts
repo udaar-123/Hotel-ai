@@ -1,10 +1,13 @@
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { RoomStatus } from "./types";
 
 export const RoomsRepository = {
   // Room Types
   async getRoomTypes(hotelId: string) {
-    return prisma.room_types.findMany({ where: { hotelId }, orderBy: { name: 'asc' } });
+    return prisma.room_types.findMany({
+      where: { hotelId },
+      orderBy: { name: "asc" },
+    });
   },
 
   async getRoomTypeById(id: string) {
@@ -32,7 +35,7 @@ export const RoomsRepository = {
         room_types: true,
         room_images: true,
       },
-      orderBy: { roomNumber: 'asc' }
+      orderBy: { roomNumber: "asc" },
     });
   },
 
@@ -42,7 +45,7 @@ export const RoomsRepository = {
       include: {
         room_types: true,
         room_images: true,
-      }
+      },
     });
   },
 
@@ -56,7 +59,7 @@ export const RoomsRepository = {
         isActive: data.isActive,
         status: RoomStatus.AVAILABLE,
       },
-      include: { room_types: true }
+      include: { room_types: true },
     });
   },
 
@@ -64,27 +67,32 @@ export const RoomsRepository = {
     return prisma.rooms.update({
       where: { id },
       data,
-      include: { room_types: true }
+      include: { room_types: true },
     });
   },
 
-  async addRoomImage(roomId: string, url: string, publicId: string, isPrimary: boolean = false) {
+  async addRoomImage(
+    roomId: string,
+    url: string,
+    publicId: string,
+    isPrimary: boolean = false,
+  ) {
     if (isPrimary) {
       await prisma.room_images.updateMany({
         where: { roomId },
-        data: { isPrimary: false }
+        data: { isPrimary: false },
       });
     }
     return prisma.room_images.create({
-      data: { roomId, url, publicId, isPrimary }
+      data: { roomId, url, publicId, isPrimary },
     });
   },
 
   async deleteRoomImage(id: string) {
     return prisma.room_images.delete({ where: { id } });
   },
-  
+
   async getRoomImage(id: string) {
     return prisma.room_images.findUnique({ where: { id } });
-  }
+  },
 };

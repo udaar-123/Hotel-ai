@@ -62,6 +62,17 @@ export default function DashboardPage() {
                   Status Board
                 </Button>
             )}
+
+            {profile.role === "CUSTOMER" && (
+              <>
+                <Button onClick={() => router.push("/book")} variant="outline" className="bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+                  Book a Room
+                </Button>
+                <Button onClick={() => router.push("/bookings")} variant="outline" className="bg-slate-800 text-white border-slate-700">
+                  My Bookings
+                </Button>
+              </>
+            )}
           </div>
         </div>
       ) : (
