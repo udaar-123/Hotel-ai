@@ -1,6 +1,13 @@
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { decryptSession } from "@/modules/auth/utils";
 
-export default function Home() {
+export default async function Home() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("session")?.value;
+  const session = await decryptSession(token);
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-24 bg-background text-foreground">
       <main className="flex flex-col items-center gap-8 text-center">
@@ -8,11 +15,50 @@ export default function Home() {
           Hotel Management System
         </h1>
         <p className="text-xl text-muted-foreground max-w-[600px]">
-          Welcome to the Hotel Management System. Please navigate to the appropriate dashboard or booking portal.
+          Welcome to the Hotel Management System. Please navigate to the
+          appropriate dashboard or booking portal.
         </p>
+
         <div className="flex gap-4">
-          <Button variant="default">Customer Portal</Button>
-          <Button variant="outline">Staff Login</Button>
+          {session ? (
+            <>
+              <Link
+                href="/dashboard"
+                className={buttonVariants({ variant: "default" })}
+              >
+                Go to Dashboard
+              </Link>
+              <form
+                action={async () => {
+                  "use server";
+                  const c = await cookies();
+                  c.delete("session");
+                }}
+              >
+                <button
+                  type="submit"
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  Logout
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/auth/customer/login"
+                className={buttonVariants({ variant: "default" })}
+              >
+                Customer Portal
+              </Link>
+              <Link
+                href="/auth/staff/login"
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Staff Login
+              </Link>
+            </>
+          )}
         </div>
       </main>
     </div>
