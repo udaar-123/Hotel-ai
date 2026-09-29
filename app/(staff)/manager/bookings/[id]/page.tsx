@@ -9,6 +9,7 @@ export default function BookingDetailPage() {
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [error, setError] = useState("");
 
   const fetchBooking = async () => {
@@ -25,6 +26,26 @@ export default function BookingDetailPage() {
       setError("Error loading booking.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateInvoice = async () => {
+    setInvoiceLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/v1/invoices/${params.id}/generate`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok && (json.success || json.data)) {
+        await fetchBooking();
+        window.open(`/shared/invoice/${params.id}`, "_blank");
+      } else {
+        setError(json.error || "Failed to generate invoice");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Error generating invoice");
+    } finally {
+      setInvoiceLoading(false);
     }
   };
 
@@ -125,6 +146,32 @@ export default function BookingDetailPage() {
             <ul className="space-y-1 text-sm text-slate-700">
               <li><strong className="text-slate-900">Total Price:</strong> ${booking.totalAmount}</li>
             </ul>
+          </div>
+
+          <div className="md:col-span-2">
+            <h2 className="text-lg font-semibold mb-2">Invoice</h2>
+            {booking.status !== "PENDING_PAYMENT" && booking.status !== "CANCELLED" ? (
+              <div className="mt-2">
+                {booking.invoices && booking.invoices.length > 0 ? (
+                  <button 
+                    onClick={() => window.open(`/shared/invoice/${booking.id}`, "_blank")}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    View Invoice
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleGenerateInvoice}
+                    disabled={invoiceLoading}
+                    className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {invoiceLoading ? "Generating..." : "Generate Invoice"}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Invoice not available for this booking status.</p>
+            )}
           </div>
         </div>
       </div>

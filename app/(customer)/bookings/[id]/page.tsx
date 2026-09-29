@@ -12,6 +12,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const [isCancelling, setIsCancelling] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   const fetchBooking = async () => {
     try {
@@ -23,6 +24,25 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
       console.error(error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGenerateInvoice = async () => {
+    setInvoiceLoading(true);
+    try {
+      const res = await fetch(`/api/v1/invoices/${id}/generate`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok && (json.success || json.data)) {
+        await fetchBooking();
+        window.open(`/shared/invoice/${id}`, "_blank");
+      } else {
+        alert(json.error || "Failed to generate invoice");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error generating invoice");
+    } finally {
+      setInvoiceLoading(false);
     }
   };
 
@@ -257,6 +277,24 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
           >
             {isCancelling ? "Cancelling..." : "Cancel Booking"}
           </button>
+        )}
+        {["CONFIRMED", "CHECKED_IN", "CHECKED_OUT"].includes(booking.status) && (
+          booking.invoices && booking.invoices.length > 0 ? (
+            <button 
+              onClick={() => window.open(`/shared/invoice/${booking.id}`, "_blank")}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              View Invoice
+            </button>
+          ) : (
+            <button 
+              onClick={handleGenerateInvoice}
+              disabled={invoiceLoading}
+              className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 disabled:opacity-50"
+            >
+              {invoiceLoading ? "Generating..." : "Generate Invoice"}
+            </button>
+          )
         )}
       </div>
 

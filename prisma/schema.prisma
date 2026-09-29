@@ -68,6 +68,7 @@ model bookings {
   users            users                @relation(fields: [userId], references: [id], onDelete: Cascade)
   checkins         checkins?
   payments         payments?
+  invoices         invoices?
   service_orders   service_orders[]
 }
 
@@ -287,6 +288,17 @@ model refunds {
   updatedAt   DateTime      @updatedAt
   refund_logs refund_logs[]
   payments    payments      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+}
+
+model invoices {
+  id          String   @id @default(uuid())
+  bookingId   String   @unique
+  invoiceNum  String   @unique
+  totalAmount Float
+  issuedAt    DateTime @default(now())
+  pdfUrl      String?
+  status      String   @default("ISSUED") // ISSUED, PAID, VOID
+  bookings    bookings @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 }
 
 model revenue_insights {
