@@ -75,6 +75,12 @@ export default function DashboardPage() {
               </>
             )}
 
+            {(profile.role === "ADMIN" || profile.role === "MANAGER" || profile.role === "HOUSEKEEPER") && (
+              <Button onClick={() => router.push("/housekeeper")} variant="outline" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0 mt-4 w-full">
+                Housekeeping Tasks
+              </Button>
+            )}
+
             {profile.role === "CUSTOMER" && (
               <>
                 <Button onClick={() => router.push("/book")} variant="outline" className="bg-indigo-600 hover:bg-indigo-700 text-white border-0">

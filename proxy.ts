@@ -6,6 +6,7 @@ const ROLE_ROUTE_MAP: Record<string, string[]> = {
   '/manager/board': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER'],
   '/manager/refunds': ['ADMIN', 'MANAGER'],
   '/manager': ['ADMIN', 'MANAGER'],
+  '/housekeeper': ['ADMIN', 'MANAGER', 'HOUSEKEEPER'],
   '/dashboard': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER', 'CUSTOMER'],
   '/profile': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER', 'CUSTOMER'],
   '/book': ['CUSTOMER'],
@@ -14,7 +15,7 @@ const ROLE_ROUTE_MAP: Record<string, string[]> = {
 
 const SESSION_COOKIE = 'session'
 
-const PROTECTED_ROUTES = ['/dashboard', '/admin', '/manager', '/profile', '/book', '/bookings']
+const PROTECTED_ROUTES = ['/dashboard', '/admin', '/manager', '/housekeeper', '/profile', '/book', '/bookings']
 const AUTH_ROUTES = [
   '/auth/customer/login',
   '/auth/staff/login',
@@ -75,6 +76,7 @@ export const config = {
     '/dashboard/:path*',
     '/admin/:path*',
     '/manager/:path*',
+    '/housekeeper/:path*',
     '/profile/:path*',
     '/book/:path*',
     '/bookings/:path*',
