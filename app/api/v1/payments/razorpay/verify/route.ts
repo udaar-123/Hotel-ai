@@ -15,6 +15,9 @@ export async function POST(req: NextRequest) {
     const result = await PaymentsRepository.confirmPaymentAndBooking(payment.id, razorpay_payment_id);
     await PaymentsRepository.logPaymentEvent(payment.id, "PAYMENT_CAPTURED_CLIENT", { razorpay_payment_id });
     
+    const { EventBus } = await import("@/shared/events");
+    EventBus.emit("booking.confirmed", { booking: result.booking });
+
     return formatSuccessResponse(result.booking);
   } catch (error) {
     return formatErrorResponse(error);

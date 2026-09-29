@@ -180,7 +180,7 @@ model housekeeping_tasks {
 }
 
 model notification_logs {
-  id             String        @id
+  id             String        @id @default(uuid())
   notificationId String
   status         String
   error          String?
@@ -189,11 +189,13 @@ model notification_logs {
 }
 
 model notifications {
-  id                String              @id
+  id                String              @id @default(uuid())
   userId            String
   title             String
   message           String
   channel           String
+  isRead            Boolean             @default(false)
+  link              String?
   createdAt         DateTime            @default(now())
   notification_logs notification_logs[]
   users             users               @relation(fields: [userId], references: [id], onDelete: Cascade)

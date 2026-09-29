@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/ui/NotificationBell";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -24,7 +25,10 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-6 text-white p-8">
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-6 text-white p-8 relative">
+      <div className="absolute top-6 right-8">
+        <NotificationBell />
+      </div>
       <h1 className="text-3xl font-bold">Dashboard</h1>
       
       {profile ? (

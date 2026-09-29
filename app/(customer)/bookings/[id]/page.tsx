@@ -201,7 +201,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
 
   const canCancel = booking.status === "PENDING_PAYMENT" || booking.status === "CONFIRMED";
   const canPay = booking.status === "PENDING_PAYMENT";
-  const canRefund = booking.status === "CANCELLED" && (booking.payments?.[0]?.status === "COMPLETED" || booking.totalAmount > 0);
+  const canRefund = booking.status === "CANCELLED" && (booking.payments?.status === "COMPLETED" || booking.totalAmount > 0) && !booking.payments?.refunds;
 
   return (
     <div className="p-6 max-w-3xl mx-auto text-slate-100">

@@ -195,7 +195,10 @@ export const BookingsRepository = {
       include: {
         rooms: { include: { room_types: true, room_images: true } },
         booking_guests: true,
-        identity_docs: true
+        identity_docs: true,
+        payments: {
+          include: { refunds: true }
+        }
       }
     });
   },

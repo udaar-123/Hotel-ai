@@ -9,3 +9,8 @@ export const Events = {
   STAFF_CREATED: "staff.created",
   STAFF_DEACTIVATED: "staff.deactivated",
 };
+
+// Initialize listeners
+if (typeof window === "undefined") {
+  require("@/modules/notifications/service");
+}

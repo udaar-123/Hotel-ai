@@ -113,8 +113,7 @@ export const PaymentsService = {
     // Process refund in Razorpay if online payment
     if (approved.payments.method === "ONLINE" && razorpay) {
       try {
-        const rzpRefund = await razorpay.refunds.create({
-          payment_id: approved.payments.transactionId!,
+        const rzpRefund = await razorpay.payments.refund(approved.payments.transactionId!, {
           amount: Math.round(approved.amount * 100)
         });
         
