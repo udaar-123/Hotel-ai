@@ -52,6 +52,7 @@ export const UsersRepository = {
           },
           staff_profile: {
             create: {
+              id: crypto.randomUUID(),
               mustChangePassword: true,
               createdByUserId: creatorId,
             },
@@ -63,7 +64,7 @@ export const UsersRepository = {
         },
       });
       return u;
-    });
+    }, { maxWait: 10000, timeout: 20000 });
     
     return this.mapToProfile(user);
   },
@@ -92,7 +93,7 @@ export const UsersRepository = {
         },
       });
       return this.mapToProfile(user as any);
-    });
+    }, { maxWait: 10000, timeout: 20000 });
   },
 
   async updateProfile(id: string, data: { name?: string; phone?: string }) {

@@ -9,7 +9,16 @@ export async function GET(req: NextRequest) {
     const session = await decryptSession(req.cookies.get("session")?.value);
     if (!session) throw new UnauthorizedError();
 
-    const bookings = await BookingsService.getCustomerBookings(session.userId);
+    let bookings;
+    if (session.role === "CUSTOMER") {
+      bookings = await BookingsService.getCustomerBookings(session.userId);
+    } else {
+      const { prisma } = await import("@/lib/prisma");
+      const hotel = await prisma.hotels.findFirst();
+      if (!hotel) throw new Error("No hotel found");
+      bookings = await BookingsService.getAllBookings({ id: session.userId, role: session.role }, hotel.id);
+    }
+    
     return formatSuccessResponse(bookings);
   } catch (error) {
     return formatErrorResponse(error);

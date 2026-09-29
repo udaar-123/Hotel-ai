@@ -54,13 +54,21 @@ export default function DashboardPage() {
                 <Button onClick={() => router.push("/manager/rooms")} variant="outline" className="bg-slate-800 text-white border-slate-700">
                   Rooms Inventory
                 </Button>
+                <Button onClick={() => router.push("/manager/refunds")} variant="outline" className="bg-orange-600 hover:bg-orange-700 text-white border-0">
+                  Refunds Queue
+                </Button>
               </>
             )}
 
             {(profile.role === "ADMIN" || profile.role === "MANAGER" || profile.role === "RECEPTIONIST" || profile.role === "HOUSEKEEPER") && (
+              <>
+                <Button onClick={() => router.push("/manager/bookings")} variant="outline" className="bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+                  Manage Bookings
+                </Button>
                 <Button onClick={() => router.push("/manager/board")} variant="outline" className="bg-slate-800 text-white border-slate-700">
                   Status Board
                 </Button>
+              </>
             )}
 
             {profile.role === "CUSTOMER" && (

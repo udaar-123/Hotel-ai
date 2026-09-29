@@ -19,3 +19,7 @@ export const CreateBookingSchema = z.object({
   guestEmail: z.string().email().optional().or(z.literal("")),
   guestPhone: z.string().optional().or(z.literal("")),
 });
+
+export const CreateOfflineBookingSchema = CreateBookingSchema.extend({
+  amountPaid: z.coerce.number().min(0),
+});

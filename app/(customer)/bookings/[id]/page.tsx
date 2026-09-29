@@ -28,7 +28,82 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
 
   useEffect(() => {
     fetchBooking();
+    
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+    
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    }
   }, [id]);
+
+  const handlePayment = async () => {
+    try {
+      const res = await fetch('/api/v1/payments/razorpay/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id })
+      });
+      if (!res.ok) throw new Error("Failed to create order");
+      const json = await res.json();
+      const orderData = json.data;
+      
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_T0LdkLmWCxUbuS",
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.orderId,
+        name: "Hotel Booking",
+        description: "Booking Payment",
+        handler: async function (response: any) {
+          try {
+            await fetch('/api/v1/payments/razorpay/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            });
+            alert("Payment Successful!");
+            fetchBooking();
+          } catch (err) {
+            console.error("Verification failed", err);
+          }
+        },
+      };
+      
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (e) {
+      console.error(e);
+      alert("Error initiating payment");
+    }
+  };
+
+  const requestRefund = async () => {
+    const reason = window.prompt("Please enter a reason for the refund:");
+    if (!reason) return;
+    
+    try {
+      const res = await fetch("/api/v1/refunds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: booking.id, reason }),
+      });
+      if (!res.ok) throw new Error("Failed to request refund");
+      alert("Refund requested successfully");
+      fetchBooking();
+    } catch (error) {
+      console.error(error);
+      alert("Error requesting refund");
+    }
+  };
 
   const cancelBooking = async () => {
     if (!confirm("Are you sure you want to cancel this booking?")) return;
@@ -105,6 +180,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   if (!booking) return <div className="p-6">Booking not found.</div>;
 
   const canCancel = booking.status === "PENDING_PAYMENT" || booking.status === "CONFIRMED";
+  const canPay = booking.status === "PENDING_PAYMENT";
+  const canRefund = booking.status === "CANCELLED" && (booking.payments?.[0]?.status === "COMPLETED" || booking.totalAmount > 0);
 
   return (
     <div className="p-6 max-w-3xl mx-auto text-slate-100">
@@ -155,8 +232,24 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {canCancel && (
-        <div className="mb-6 text-right">
+      <div className="mb-6 flex gap-4 justify-end">
+        {canPay && (
+          <button 
+            onClick={handlePayment}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          >
+            Pay with Razorpay
+          </button>
+        )}
+        {canRefund && (
+          <button 
+            onClick={requestRefund}
+            className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700"
+          >
+            Request Refund
+          </button>
+        )}
+        {canCancel && (
           <button 
             onClick={cancelBooking}
             disabled={isCancelling}
@@ -164,8 +257,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
           >
             {isCancelling ? "Cancelling..." : "Cancel Booking"}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="bg-white shadow rounded p-6 text-slate-900">
         <h2 className="text-xl font-semibold mb-4">Identity Document</h2>

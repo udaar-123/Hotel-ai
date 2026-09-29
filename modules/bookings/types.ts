@@ -12,6 +12,19 @@ export enum BookingSource {
   OFFLINE = "OFFLINE"
 }
 
+export enum PaymentMethod {
+  CASH = "CASH",
+  CARD = "CARD",
+  UPI = "UPI"
+}
+
+export enum PaymentStatus {
+  PENDING = "PENDING",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED",
+  REFUNDED = "REFUNDED"
+}
+
 export interface SearchAvailabilityParams {
   checkInDate: Date;
   checkOutDate: Date;

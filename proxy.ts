@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { decryptSession } from '@/modules/auth/utils'
 const ROLE_ROUTE_MAP: Record<string, string[]> = {
   '/admin': ['ADMIN'],
+  '/manager/bookings': ['ADMIN', 'MANAGER', 'RECEPTIONIST'],
   '/manager/board': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER'],
+  '/manager/refunds': ['ADMIN', 'MANAGER'],
   '/manager': ['ADMIN', 'MANAGER'],
   '/dashboard': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER', 'CUSTOMER'],
   '/profile': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER', 'CUSTOMER'],

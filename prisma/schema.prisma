@@ -84,7 +84,7 @@ model chat_sessions {
 }
 
 model checkins {
-  id              String            @id
+  id              String            @id @default(uuid())
   bookingId       String            @unique
   status          String            @default("PENDING")
   arrivalTime     String?
@@ -219,7 +219,7 @@ model password_reset_tokens {
 }
 
 model payment_logs {
-  id        String   @id
+  id        String   @id @default(uuid())
   paymentId String
   action    String
   payload   String?
@@ -228,14 +228,14 @@ model payment_logs {
 }
 
 model payments {
-  id            String         @id
+  id            String         @id @default(uuid())
   bookingId     String         @unique
   transactionId String?        @unique
   amount        Float
   status        String         @default("PENDING")
   method        String?
   createdAt     DateTime       @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime       @updatedAt
   payment_logs  payment_logs[]
   bookings      bookings       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   refunds       refunds?
@@ -269,7 +269,7 @@ model pricing_rules {
 }
 
 model refund_logs {
-  id        String   @id
+  id        String   @id @default(uuid())
   refundId  String
   action    String
   payload   String?
@@ -278,13 +278,13 @@ model refund_logs {
 }
 
 model refunds {
-  id          String        @id
+  id          String        @id @default(uuid())
   paymentId   String        @unique
   amount      Float
   status      String        @default("PENDING")
   reason      String?
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime
+  updatedAt   DateTime      @updatedAt
   refund_logs refund_logs[]
   payments    payments      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 }

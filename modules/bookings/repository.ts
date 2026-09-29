@@ -96,12 +96,91 @@ export const BookingsRepository = {
       });
 
       return booking;
-    });
+    }, { maxWait: 10000, timeout: 20000 });
+  },
+
+  async createOfflineBooking(data: {
+    hotelId: string;
+    userId: string;
+    roomId: string;
+    checkInDate: Date;
+    checkOutDate: Date;
+    guests: number;
+    guestName: string;
+    guestEmail?: string;
+    guestPhone?: string;
+    totalAmount: number;
+    amountPaid: number;
+    createdByStaffId: string;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const overlapping = await tx.bookings.findFirst({
+        where: {
+          roomId: data.roomId,
+          status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN] },
+          OR: [
+            { checkInDate: { lt: data.checkOutDate }, checkOutDate: { gt: data.checkInDate } }
+          ]
+        }
+      });
+
+      if (overlapping) throw new Error("Room is no longer available for these dates");
+
+      const bookingId = crypto.randomUUID();
+      const booking = await tx.bookings.create({
+        data: {
+          id: bookingId,
+          hotelId: data.hotelId,
+          userId: data.userId, // We link to the Receptionist user ID initially, or create a guest user in a real system
+          roomId: data.roomId,
+          checkInDate: data.checkInDate,
+          checkOutDate: data.checkOutDate,
+          totalAmount: data.totalAmount,
+          status: BookingStatus.CONFIRMED,
+          source: BookingSource.OFFLINE,
+          createdByStaffId: data.createdByStaffId,
+          guestCount: data.guests,
+          booking_guests: {
+            create: {
+              id: crypto.randomUUID(),
+              name: data.guestName,
+              email: data.guestEmail,
+              phone: data.guestPhone
+            }
+          },
+          payments: {
+            create: {
+              id: crypto.randomUUID(),
+              amount: data.amountPaid,
+              status: data.amountPaid >= data.totalAmount ? "COMPLETED" : "PENDING",
+              method: "CASH"
+            }
+          }
+        },
+        include: {
+          booking_guests: true,
+          rooms: { include: { room_types: true } }
+        }
+      });
+
+      return booking;
+    }, { maxWait: 10000, timeout: 20000 });
   },
 
   async getBookingsByUser(userId: string) {
     return prisma.bookings.findMany({
       where: { userId },
+      include: {
+        rooms: { include: { room_types: true, room_images: true } },
+        booking_guests: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  },
+
+  async getAllBookings(hotelId: string) {
+    return prisma.bookings.findMany({
+      where: { hotelId },
       include: {
         rooms: { include: { room_types: true, room_images: true } },
         booking_guests: true
@@ -129,6 +208,51 @@ export const BookingsRepository = {
         rooms: { include: { room_types: true } }
       }
     });
+  },
+
+  async checkIn(bookingId: string, roomId: string) {
+    return prisma.$transaction(async (tx) => {
+      const updatedBooking = await tx.bookings.update({
+        where: { id: bookingId },
+        data: { status: BookingStatus.CHECKED_IN },
+        include: { rooms: { include: { room_types: true } } }
+      });
+
+      await tx.checkins.upsert({
+        where: { bookingId },
+        update: { status: "COMPLETED", arrivalTime: new Date().toISOString() },
+        create: {
+          id: crypto.randomUUID(),
+          bookingId,
+          status: "COMPLETED",
+          arrivalTime: new Date().toISOString()
+        }
+      });
+
+      await tx.rooms.update({
+        where: { id: roomId },
+        data: { status: "OCCUPIED" }
+      });
+
+      return updatedBooking;
+    }, { maxWait: 10000, timeout: 20000 });
+  },
+
+  async checkOut(bookingId: string, roomId: string) {
+    return prisma.$transaction(async (tx) => {
+      const updatedBooking = await tx.bookings.update({
+        where: { id: bookingId },
+        data: { status: BookingStatus.CHECKED_OUT },
+        include: { rooms: { include: { room_types: true } } }
+      });
+
+      await tx.rooms.update({
+        where: { id: roomId },
+        data: { status: "AVAILABLE", cleaningStatus: "DIRTY" }
+      });
+
+      return updatedBooking;
+    }, { maxWait: 10000, timeout: 20000 });
   },
 
   async addIdentityDocument(bookingId: string, url: string, publicId: string, documentType: string) {
