@@ -9,9 +9,27 @@ export function AiChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   
-  const { messages, sendMessage, status } = useChat();
+  const { messages, sendMessage, status, error, regenerate } = useChat({
+    maxToolRoundtrips: 3
+  });
   
   const isLoading = status === 'in_progress' || status === 'streaming';
+  
+  // Debug messages state
+  useEffect(() => {
+    console.log("Current messages state:", messages);
+    
+    // Auto-regenerate if the LLM drops the text response after a tool call
+    if (!isLoading && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.role === 'assistant' && (!lastMsg.content || lastMsg.content.trim() === '') && lastMsg.toolInvocations && lastMsg.toolInvocations.length > 0) {
+        
+        // If the stream is done (!isLoading) and the last message has tools but no text, force the summary!
+        console.log("Auto-triggering sendMessage to get tool summary...");
+        setTimeout(() => sendMessage({ text: "Please summarize the results." }), 100);
+      }
+    }
+  }, [messages, isLoading, regenerate]);
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +77,7 @@ export function AiChatWidget() {
               </div>
             )}
             
-            {messages.map(m => (
+            {messages.filter(m => m.content !== "Please summarize the results.").map(m => (
               <div key={m.id} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
                 <div 
                   className={`max-w-[85%] px-4 py-3 text-[14px] leading-relaxed shadow-sm ${
@@ -68,7 +86,19 @@ export function AiChatWidget() {
                       : 'bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-200'
                   }`}
                 >
-                  {m.parts?.map((part, i) => (
+                  {m.content && <span className="whitespace-pre-wrap">{m.content}</span>}
+                  
+                  {m.toolInvocations?.map((toolInvocation: any, i: number) => (
+                    <div key={i} className="text-xs text-gray-500 font-medium my-2 flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md w-fit border border-gray-100">
+                      {toolInvocation.state === 'result' ? (
+                        <>✅ Tool completed</>
+                      ) : (
+                        <><Loader2 size={12} className="animate-spin text-gray-400" /> Running tool...</>
+                      )}
+                    </div>
+                  ))}
+                  
+                  {!m.content && m.parts?.map((part: any, i: number) => (
                     <div key={i}>
                       {part.type === 'tool' && (
                         <div className="text-xs text-gray-500 font-medium mb-2 flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md w-fit border border-gray-100">
@@ -79,6 +109,15 @@ export function AiChatWidget() {
                       {part.type === 'text' && <span className="whitespace-pre-wrap">{part.text}</span>}
                     </div>
                   ))}
+
+                  {/* Debug raw keys if no content and no parts */}
+                  {!m.content && !m.parts && (
+                    <div className="text-xs text-red-400 mt-2 p-2 bg-red-50 rounded">
+                      Debug Keys: {Object.keys(m).join(', ')}
+                      <br/>
+                      Text: {m.text}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -94,6 +133,13 @@ export function AiChatWidget() {
                 </div>
               </div>
             )}
+            {error && (
+              <div className="flex justify-center my-2">
+                <div className="bg-red-50 text-red-500 text-xs px-3 py-2 rounded-lg border border-red-100 max-w-[90%] text-center">
+                  Error: {error.message || "Failed to connect to AI server."}
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -101,7 +147,7 @@ export function AiChatWidget() {
           <div className="p-4 bg-white border-t border-gray-100">
             <form onSubmit={handleSubmit} className="relative flex items-center">
               <input
-                value={input || ''}
+                value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask something..."
                 className="w-full bg-gray-50 border border-gray-200 rounded-full pl-4 pr-12 py-3 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-transparent transition-all shadow-sm"
