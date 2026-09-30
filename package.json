@@ -16,6 +16,7 @@
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.11.0",
     "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
     "ioredis": "^6.0.0",
     "jose": "^6.2.7",
     "lucide-react": "^1.28.0",
