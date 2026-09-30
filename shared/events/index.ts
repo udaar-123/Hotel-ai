@@ -13,4 +13,6 @@ export const Events = {
 // Initialize listeners
 if (typeof window === "undefined") {
   require("@/modules/notifications/service");
+  require("@/modules/reviews/service");
+  require("@/modules/audit/service");
 }

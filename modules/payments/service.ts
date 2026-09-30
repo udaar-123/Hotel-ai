@@ -100,15 +100,15 @@ export const PaymentsService = {
     return PaymentsRepository.getRefundQueue();
   },
 
-  async processRefund(refundId: string, action: "APPROVE" | "REJECT") {
+  async processRefund(refundId: string, action: "APPROVE" | "REJECT", actorId?: string) {
     if (action === "REJECT") {
       const rejected = await PaymentsRepository.updateRefundStatus(refundId, RefundStatus.REJECTED);
-      EventBus.emit("refund.rejected", { refund: rejected });
+      EventBus.emit("refund.rejected", { refund: rejected, actorId });
       return rejected;
     }
 
     const approved = await PaymentsRepository.updateRefundStatus(refundId, RefundStatus.APPROVED);
-    EventBus.emit("refund.approved", { refund: approved });
+    EventBus.emit("refund.approved", { refund: approved, actorId });
     
     // Process refund in Razorpay if online payment
     if (approved.payments.method === "ONLINE" && razorpay) {

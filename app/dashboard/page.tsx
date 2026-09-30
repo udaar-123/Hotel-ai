@@ -199,6 +199,12 @@ export default function DashboardPage() {
                     <Button onClick={() => router.push("/manager/refunds")} variant="outline" className="bg-orange-600 hover:bg-orange-700 text-white border-0">
                       Refunds Queue
                     </Button>
+                    <Button onClick={() => router.push("/manager/reviews")} variant="outline" className="bg-purple-600 hover:bg-purple-700 text-white border-0">
+                      Reviews Queue
+                    </Button>
+                    <Button onClick={() => router.push("/manager/audit")} variant="outline" className="bg-red-900 hover:bg-red-800 text-white border-0">
+                      Audit Logs
+                    </Button>
                   </>
                 )}
 

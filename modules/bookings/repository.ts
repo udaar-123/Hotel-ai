@@ -251,7 +251,7 @@ export const BookingsRepository = {
 
       await tx.rooms.update({
         where: { id: roomId },
-        data: { status: "AVAILABLE", cleaningStatus: "DIRTY" }
+        data: { status: "CHECKED_OUT" }
       });
 
       return updatedBooking;

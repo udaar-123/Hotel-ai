@@ -13,6 +13,10 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
 
   const fetchBooking = async () => {
     try {
@@ -196,6 +200,27 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const submitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingReview(true);
+    try {
+      const res = await fetch("/api/v1/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: booking.id, rating: reviewRating, comment: reviewComment }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Failed to submit review");
+      setReviewSubmitted(true);
+      fetchBooking(); // refresh
+    } catch (error: any) {
+      alert("Error submitting review: " + error.message);
+      console.error(error);
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
   if (isLoading) return <div className="p-6">Loading booking details...</div>;
   if (!booking) return <div className="p-6">Booking not found.</div>;
 
@@ -326,6 +351,50 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
           </div>
         )}
       </div>
+
+      {booking.status === "CHECKED_OUT" && !booking.reviews && !reviewSubmitted && (
+        <div className="bg-white shadow rounded p-6 text-slate-900 mt-6">
+          <h2 className="text-xl font-semibold mb-4">Leave a Review</h2>
+          <form onSubmit={submitReview}>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Rating</label>
+              <select 
+                value={reviewRating} 
+                onChange={(e) => setReviewRating(Number(e.target.value))}
+                className="border p-2 rounded w-full md:w-auto"
+              >
+                {[5, 4, 3, 2, 1].map((num) => (
+                  <option key={num} value={num}>{num} Stars</option>
+                ))}
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Comment</label>
+              <textarea 
+                value={reviewComment} 
+                onChange={(e) => setReviewComment(e.target.value)}
+                className="border p-2 rounded w-full"
+                rows={4}
+                required
+              ></textarea>
+            </div>
+            <button 
+              type="submit" 
+              disabled={isSubmittingReview}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isSubmittingReview ? "Submitting..." : "Submit Review"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {reviewSubmitted && (
+        <div className="bg-green-100 text-green-800 shadow rounded p-6 mt-6">
+          Review submitted and pending moderation
+        </div>
+      )}
+
     </div>
   );
 }

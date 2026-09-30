@@ -39,7 +39,7 @@ export default function BookingDetailPage() {
         await fetchBooking();
         window.open(`/shared/invoice/${params.id}`, "_blank");
       } else {
-        setError(json.error || "Failed to generate invoice");
+        setError(json.error?.message || "Failed to generate invoice");
       }
     } catch (err) {
       console.error(err);
@@ -66,7 +66,7 @@ export default function BookingDetailPage() {
       if (json.success) {
         await fetchBooking();
       } else {
-        setError(json.error || `Failed to ${action}`);
+        setError(json.error?.message || `Failed to ${action}`);
       }
     } catch (err) {
       console.error(err);

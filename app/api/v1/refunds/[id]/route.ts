@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       throw new Error("Action must be APPROVE or REJECT");
     }
 
-    const processed = await PaymentsService.processRefund(resolvedParams.id, action);
+    const processed = await PaymentsService.processRefund(resolvedParams.id, action, session.userId);
     return formatSuccessResponse(processed, `Refund ${action.toLowerCase()}d successfully`);
   } catch (error) {
     return formatErrorResponse(error);

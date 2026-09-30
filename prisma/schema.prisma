@@ -17,7 +17,7 @@ model ai_memories {
 }
 
 model audit_logs {
-  id          String   @id
+  id          String   @id @default(uuid())
   userId      String
   action      String
   targetTable String
@@ -69,6 +69,7 @@ model bookings {
   checkins         checkins?
   payments         payments?
   invoices         invoices?
+  reviews          reviews?
   service_orders   service_orders[]
 }
 
@@ -166,6 +167,7 @@ model hotels {
   services                services[]
   support_tickets         support_tickets[]
   room_types              room_types[]
+  reviews                 reviews[]
 }
 
 model housekeeping_tasks {
@@ -301,6 +303,21 @@ model invoices {
   pdfUrl      String?
   status      String   @default("ISSUED") // ISSUED, PAID, VOID
   bookings    bookings @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model reviews {
+  id        String   @id @default(uuid())
+  bookingId String   @unique
+  userId    String
+  hotelId   String
+  rating    Int
+  comment   String?
+  status    String   @default("PENDING") // PENDING, PUBLISHED, REJECTED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bookings  bookings @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotels    hotels   @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 }
 
 model revenue_insights {
@@ -478,6 +495,7 @@ model users {
   user_roles            user_roles[]
   staff_profile         staff_profiles?   @relation("StaffProfileToUser")
   created_staff_profiles staff_profiles[] @relation("CreatorToStaffProfile")
+  reviews               reviews[]
 }
 
 model staff_profiles {
