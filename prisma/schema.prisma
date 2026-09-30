@@ -25,6 +25,8 @@ model audit_logs {
   newValue    String?
   createdAt   DateTime @default(now())
   users       users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([action, createdAt])
 }
 
 model booking_guests {
@@ -71,6 +73,10 @@ model bookings {
   invoices         invoices?
   reviews          reviews?
   service_orders   service_orders[]
+
+  @@index([hotelId, checkInDate, checkOutDate])
+  @@index([userId])
+  @@index([status])
 }
 
 model chat_sessions {
@@ -179,6 +185,8 @@ model housekeeping_tasks {
   createdAt  DateTime @default(now())
   updatedAt  DateTime
   rooms      rooms    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }
 
 model notification_logs {
@@ -201,6 +209,8 @@ model notifications {
   createdAt         DateTime            @default(now())
   notification_logs notification_logs[]
   users             users               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
 }
 
 model otp_verifications {
@@ -244,6 +254,8 @@ model payments {
   payment_logs  payment_logs[]
   bookings      bookings       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   refunds       refunds?
+
+  @@index([status, updatedAt])
 }
 
 model permissions {
@@ -292,6 +304,8 @@ model refunds {
   updatedAt   DateTime      @updatedAt
   refund_logs refund_logs[]
   payments    payments      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
 }
 
 model invoices {
@@ -406,6 +420,9 @@ model rooms {
   hotels                  hotels                    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
   room_types              room_types                @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
   room_images             room_images[]
+
+  @@index([hotelId, status])
+  @@index([roomTypeId])
 }
 
 model service_orders {
