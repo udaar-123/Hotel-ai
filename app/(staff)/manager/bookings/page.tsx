@@ -1,34 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchBookings() {
-      try {
-        const res = await fetch("/api/v1/bookings");
-        const json = await res.json();
-        if (json.success) {
-          setBookings(json.data);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchBookings();
-  }, []);
+  const { data: resData, error, isLoading: loading } = useSWR("/api/v1/bookings", fetcher);
+  const bookings = resData?.data || [];
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Bookings</h1>
-        <Link href="/manager/bookings/new" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        <Link href="/manager/bookings/new" className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800">
           New Walk-in Booking
         </Link>
       </div>

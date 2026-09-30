@@ -1,159 +1,250 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useState } from "react";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotificationBell } from "@/components/ui/NotificationBell";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { 
+  Building2, 
+  Users, 
+  BedDouble, 
+  CreditCard, 
+  Star, 
+  FileText, 
+  CalendarCheck, 
+  LayoutDashboard,
+  LogOut,
+  User,
+  Sparkles,
+  ClipboardList
+} from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<any>(null);
-  const [dashboardData, setDashboardData] = useState<any>({});
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const userRes = await fetch("/api/v1/users/me");
-        const userData = await userRes.json();
-        if (userData.success) {
-          const user = userData.data;
-          setProfile(user);
-
-          const role = user.role;
-          let combinedData = {};
-
-          if (role === "CUSTOMER") {
-            const res = await fetch("/api/v1/dashboard/customer").then(r => r.json());
-            if (res.success) combinedData = { ...combinedData, ...res.data };
-          }
-
-          if (role === "RECEPTIONIST" || role === "MANAGER" || role === "ADMIN") {
-            const res = await fetch("/api/v1/dashboard/receptionist").then(r => r.json());
-            if (res.success) combinedData = { ...combinedData, receptionist: res.data };
-          }
-
-          if (role === "MANAGER" || role === "ADMIN") {
-            const res = await fetch("/api/v1/dashboard/manager").then(r => r.json());
-            if (res.success) combinedData = { ...combinedData, manager: res.data };
-          }
-
-          if (role === "ADMIN") {
-            const res = await fetch("/api/v1/dashboard/admin").then(r => r.json());
-            if (res.success) combinedData = { ...combinedData, admin: res.data };
-          }
-          
-          setDashboardData(combinedData);
-        }
-      } catch (err) {
-        console.error("Error loading dashboard data", err);
-      } finally {
-        setLoading(false);
+  const fetchDashboardData = async () => {
+    const userRes = await fetch("/api/v1/users/me");
+    if (!userRes.ok) throw new Error("Not logged in");
+    const userData = await userRes.json();
+    const profile = userData.data;
+    const role = profile.role;
+    
+    let fetchedData: any = {};
+    if (role === "CUSTOMER") {
+      const res = await fetch("/api/v1/dashboard/customer");
+      fetchedData = (await res.json()).data;
+    } else {
+      if (role === "RECEPTIONIST" || role === "MANAGER" || role === "ADMIN") {
+        const rRes = await fetch("/api/v1/dashboard/receptionist");
+        fetchedData.receptionist = (await rRes.json()).data;
+      }
+      if (role === "MANAGER" || role === "ADMIN") {
+        const mRes = await fetch("/api/v1/dashboard/manager");
+        fetchedData.manager = (await mRes.json()).data;
+      }
+      if (role === "ADMIN") {
+        const aRes = await fetch("/api/v1/dashboard/admin");
+        fetchedData.admin = (await aRes.json()).data;
       }
     }
-    loadData();
-  }, []);
+    return { profile, dashboardData: fetchedData };
+  };
+
+  const { data, error, isLoading } = useSWR('dashboardData', fetchDashboardData, {
+    revalidateOnFocus: true,
+  });
+
+  if (error) {
+    router.push("/auth/customer/login");
+  }
+
+  const profile = data?.profile;
+  const dashboardData = data?.dashboardData;
+  const loading = isLoading || !data;
 
   const handleLogout = async () => {
     await fetch("/api/v1/auth/logout", { method: "POST" });
-    router.push("/auth/staff/login");
-    router.refresh();
+    router.push("/auth/customer/login");
   };
 
-  const renderSkeleton = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-8 w-full max-w-6xl">
-      {[1, 2, 3, 4].map((i) => (
-        <Card key={i} className="bg-slate-800 border-slate-700 animate-pulse">
-          <CardHeader className="pb-2">
-            <div className="h-4 bg-slate-700 rounded w-1/2"></div>
-          </CardHeader>
-          <CardContent>
-            <div className="h-8 bg-slate-700 rounded w-3/4"></div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin"></div>
+          <p className="text-gray-500 font-serif italic">Preparing your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const SidebarButton = ({ icon: Icon, label, onClick, active = false }: any) => (
+    <button 
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
+        active 
+        ? 'bg-gray-900 text-white shadow-md' 
+        : 'text-gray-600 hover:bg-white hover:shadow-sm hover:text-gray-900'
+      }`}
+    >
+      <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+      <span className="font-medium text-[14px]">{label}</span>
+    </button>
   );
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center p-8 relative text-white">
-      <div className="absolute top-6 right-8 flex gap-4">
-        <NotificationBell />
-        <Button variant="destructive" onClick={handleLogout}>Logout</Button>
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#F9F8F4] via-[#F4F1EA] to-[#EAE5D9] flex text-gray-900 font-sans selection:bg-gray-900 selection:text-white">
+      
+      {/* SIDEBAR */}
+      <div className="w-72 bg-[#FAF9F6]/80 backdrop-blur-xl border-r border-[#E5E0D8] shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col h-screen sticky top-0 shrink-0">
+        <div className="p-8 border-b border-[#E5E0D8]/60">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-5 h-5 text-gray-900" />
+            <h2 className="text-xl font-serif font-bold tracking-tight text-gray-900">Grand Elegance</h2>
+          </div>
+          <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-semibold">Management System</p>
+        </div>
+
+        <div className="p-6 flex-1 overflow-y-auto no-scrollbar">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 px-2">Quick Actions</h3>
+          <div className="flex flex-col gap-1.5">
+            <SidebarButton icon={LayoutDashboard} label="Dashboard" active={true} onClick={() => {}} />
+            <SidebarButton icon={User} label="My Profile" onClick={() => router.push("/profile")} />
+
+            {profile.role === "ADMIN" && (
+              <SidebarButton icon={Users} label="Manage Managers" onClick={() => router.push("/admin/managers")} />
+            )}
+
+            {(profile.role === "ADMIN" || profile.role === "MANAGER") && (
+              <>
+                <SidebarButton icon={Users} label="Manage Staff" onClick={() => router.push("/manager/staff")} />
+                <SidebarButton icon={BedDouble} label="Room Types" onClick={() => router.push("/manager/room-types")} />
+                <SidebarButton icon={Building2} label="Inventory" onClick={() => router.push("/manager/rooms")} />
+                <SidebarButton icon={CreditCard} label="Refunds Queue" onClick={() => router.push("/manager/refunds")} />
+                <SidebarButton icon={Star} label="Reviews Queue" onClick={() => router.push("/manager/reviews")} />
+                <SidebarButton icon={FileText} label="Audit Logs" onClick={() => router.push("/manager/audit")} />
+                <SidebarButton icon={ClipboardList} label="Reports" onClick={() => router.push("/manager/reports")} />
+              </>
+            )}
+
+            {(profile.role === "ADMIN" || profile.role === "MANAGER" || profile.role === "RECEPTIONIST" || profile.role === "HOUSEKEEPER") && (
+              <>
+                <SidebarButton icon={CalendarCheck} label="Manage Bookings" onClick={() => router.push("/manager/bookings")} />
+                <SidebarButton icon={LayoutDashboard} label="Status Board" onClick={() => router.push("/manager/board")} />
+              </>
+            )}
+
+            {(profile.role === "ADMIN" || profile.role === "MANAGER" || profile.role === "HOUSEKEEPER") && (
+              <SidebarButton icon={Sparkles} label="Housekeeping" onClick={() => router.push("/housekeeper")} />
+            )}
+            
+            {profile.role === "CUSTOMER" && (
+              <SidebarButton icon={CalendarCheck} label="View Bookings" onClick={() => router.push("/bookings")} />
+            )}
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-[#E5E0D8]/60 bg-white/30">
+          <div className="flex items-center gap-3 mb-4 px-2">
+            <div className="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-serif font-bold shadow-sm overflow-hidden border-2 border-white">
+              {profile.avatarUrl ? (
+                <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                profile.name?.charAt(0).toUpperCase() || "U"
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{profile.name}</p>
+              <p className="text-xs text-gray-500 capitalize">{profile.role.toLowerCase()}</p>
+            </div>
+          </div>
+          <Button variant="outline" onClick={handleLogout} className="w-full bg-white border-[#E5E0D8] text-gray-600 hover:bg-gray-50 hover:text-gray-900 shadow-sm flex items-center justify-center gap-2">
+            <LogOut size={16} />
+            Logout
+          </Button>
+        </div>
       </div>
 
-      <div className="w-full max-w-6xl mt-12">
-        <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-        {loading ? (
-          <div className="h-6 w-1/4 bg-slate-800 animate-pulse rounded mb-8"></div>
-        ) : (
-          <div className="mb-8 flex items-center gap-3">
-            <p className="text-slate-300 text-lg">Welcome back, {profile?.name || profile?.email}</p>
-            <span className="font-mono bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded text-sm">{profile?.role}</span>
+      {/* MAIN CONTENT */}
+      <div className="flex-1 p-8 lg:p-12 relative overflow-y-auto">
+        <div className="absolute top-8 right-8 lg:top-12 lg:right-12 z-10">
+          <NotificationBell />
+        </div>
+
+        <div className="max-w-5xl mx-auto space-y-10 pb-20">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-4xl font-serif font-bold text-gray-900 tracking-tight">Overview</h1>
+            <p className="text-gray-500 text-lg">Welcome back, {profile?.name}</p>
           </div>
-        )}
 
-        {loading && renderSkeleton()}
-
-        {!loading && profile && (
-          <div className="space-y-8">
-            {/* ADMIN METRICS */}
-            {profile.role === "ADMIN" && dashboardData.admin && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-slate-200 border-b border-slate-800 pb-2">Admin Overview</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <MetricCard title="Total Platform Revenue" value={`$${dashboardData.admin.totalPlatformRevenue || 0}`} />
-                  <MetricCard title="Total Hotels" value={dashboardData.admin.totalHotels} />
-                  <MetricCard title="Total Managers" value={dashboardData.admin.totalManagers} />
-                </div>
+          {/* ADMIN METRICS */}
+          {profile.role === "ADMIN" && dashboardData.admin && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-serif font-semibold text-gray-900 flex items-center gap-2">
+                <Building2 size={20} className="text-gray-400" /> System Overview
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <MetricCard title="Total Revenue" value={`$${dashboardData.admin.totalPlatformRevenue || 0}`} />
+                <MetricCard title="Total Hotels" value={dashboardData.admin.totalHotels} />
+                <MetricCard title="Total Managers" value={dashboardData.admin.totalManagers} />
               </div>
-            )}
+            </div>
+          )}
 
-            {/* MANAGER METRICS */}
-            {(profile.role === "MANAGER" || profile.role === "ADMIN") && dashboardData.manager && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-slate-200 border-b border-slate-800 pb-2">Management Overview</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <MetricCard title="Total Revenue" value={`$${dashboardData.manager.totalRevenue || 0}`} />
-                  <MetricCard title="Occupancy Rate" value={`${dashboardData.manager.occupancyRate || 0}%`} />
-                  <MetricCard title="Pending Refunds" value={dashboardData.manager.pendingRefunds} />
-                  <MetricCard title="Active Staff" value={dashboardData.manager.activeStaff} />
-                </div>
+          {/* MANAGER METRICS */}
+          {(profile.role === "MANAGER" || profile.role === "ADMIN") && dashboardData.manager && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-serif font-semibold text-gray-900 flex items-center gap-2">
+                <ClipboardList size={20} className="text-gray-400" /> Management Pulse
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                <MetricCard title="Revenue" value={`$${dashboardData.manager.totalRevenue || 0}`} highlight />
+                <MetricCard title="Occupancy Rate" value={`${dashboardData.manager.occupancyRate || 0}%`} />
+                <MetricCard title="Pending Refunds" value={dashboardData.manager.pendingRefunds} />
+                <MetricCard title="Active Staff" value={dashboardData.manager.activeStaff} />
               </div>
-            )}
+            </div>
+          )}
 
-            {/* RECEPTIONIST METRICS */}
-            {(profile.role === "RECEPTIONIST" || profile.role === "MANAGER" || profile.role === "ADMIN") && dashboardData.receptionist && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-slate-200 border-b border-slate-800 pb-2">Front Desk Today</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <MetricCard title="Arrivals" value={dashboardData.receptionist.arrivals} />
-                  <MetricCard title="Departures" value={dashboardData.receptionist.departures} />
-                  <MetricCard title="Available Rooms" value={dashboardData.receptionist.availableRooms} />
-                  <MetricCard title="Occupied Rooms" value={dashboardData.receptionist.occupiedRooms} />
-                </div>
+          {/* RECEPTIONIST METRICS */}
+          {(profile.role === "RECEPTIONIST" || profile.role === "MANAGER" || profile.role === "ADMIN") && dashboardData.receptionist && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-serif font-semibold text-gray-900 flex items-center gap-2">
+                <CalendarCheck size={20} className="text-gray-400" /> Front Desk Today
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                <MetricCard title="Arrivals" value={dashboardData.receptionist.arrivals} />
+                <MetricCard title="Departures" value={dashboardData.receptionist.departures} />
+                <MetricCard title="Available Rooms" value={dashboardData.receptionist.availableRooms} />
+                <MetricCard title="Occupied Rooms" value={dashboardData.receptionist.occupiedRooms} />
               </div>
-            )}
+            </div>
+          )}
 
-            {/* CUSTOMER METRICS & BOOKINGS */}
-            {profile.role === "CUSTOMER" && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <MetricCard title="Past Bookings" value={dashboardData.pastBookingsCount || 0} />
-                  <Card className="bg-indigo-600/20 border-indigo-500 flex flex-col justify-center items-center p-6 cursor-pointer hover:bg-indigo-600/30 transition" onClick={() => router.push("/book")}>
-                    <h3 className="text-xl font-bold text-indigo-300">Book a Room</h3>
-                    <p className="text-indigo-200/70 text-sm mt-1">Start your next stay</p>
-                  </Card>
-                </div>
+          {/* CUSTOMER METRICS & BOOKINGS */}
+          {profile.role === "CUSTOMER" && (
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <MetricCard title="Past Bookings" value={dashboardData.pastBookingsCount || 0} />
+                <Card 
+                  className="bg-gray-900 text-white border-0 shadow-xl flex flex-col justify-center items-center p-8 cursor-pointer hover:bg-gray-800 transition-all hover:-translate-y-1 group" 
+                  onClick={() => router.push("/book")}
+                >
+                  <h3 className="text-2xl font-serif font-bold mb-2 group-hover:scale-105 transition-transform">Book a Room</h3>
+                  <p className="text-gray-400 text-sm">Experience true luxury</p>
+                </Card>
+              </div>
 
-                <h2 className="text-xl font-semibold text-slate-200 border-b border-slate-800 pb-2 mt-8">Upcoming Bookings</h2>
+              <div className="space-y-4">
+                <h2 className="text-lg font-serif font-semibold text-gray-900">Upcoming Bookings</h2>
                 {dashboardData.upcomingBookings?.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {dashboardData.upcomingBookings.map((booking: any) => (
-                      <Card key={booking.id} className="bg-slate-800 border-slate-700">
+                      <Card key={booking.id} className="bg-white/80 backdrop-blur-md border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
                         <CardHeader>
-                          <CardTitle className="text-lg text-slate-100">{booking.rooms?.room_types?.name || "Room"}</CardTitle>
-                          <CardDescription className="text-slate-400">
+                          <CardTitle className="text-lg font-serif text-gray-900">{booking.rooms?.room_types?.name || "Room"}</CardTitle>
+                          <CardDescription className="text-gray-500 font-medium mt-1">
                             Check-in: {new Date(booking.checkInDate).toLocaleDateString()}
                           </CardDescription>
                         </CardHeader>
@@ -161,95 +252,30 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="p-8 text-center bg-slate-800/50 rounded-lg border border-slate-800">
-                    <p className="text-slate-400">No upcoming bookings.</p>
-                    <Button onClick={() => router.push("/book")} className="mt-4 bg-indigo-600 hover:bg-indigo-700">
-                      Book Now
+                  <div className="p-12 text-center bg-white/60 backdrop-blur-sm rounded-2xl border border-[#E5E0D8]/60 shadow-sm">
+                    <p className="text-gray-500 font-serif italic mb-4">You have no upcoming reservations.</p>
+                    <Button onClick={() => router.push("/book")} className="bg-gray-900 text-white hover:bg-gray-800 rounded-full px-8">
+                      Book Your Stay
                     </Button>
                   </div>
                 )}
               </div>
-            )}
-
-            {/* QUICK ACTIONS */}
-            <div className="pt-8">
-              <h2 className="text-xl font-semibold text-slate-200 border-b border-slate-800 pb-2 mb-4">Quick Actions</h2>
-              <div className="flex gap-4 flex-wrap">
-                <Button onClick={() => router.push("/profile")} variant="outline" className="bg-slate-800 text-white border-slate-700">
-                  My Profile
-                </Button>
-
-                {profile.role === "ADMIN" && (
-                  <Button onClick={() => router.push("/admin/managers")} variant="outline" className="bg-slate-800 text-white border-slate-700">
-                    Manage Managers
-                  </Button>
-                )}
-
-                {(profile.role === "ADMIN" || profile.role === "MANAGER") && (
-                  <>
-                    <Button onClick={() => router.push("/manager/staff")} variant="outline" className="bg-slate-800 text-white border-slate-700">
-                      Manage Staff
-                    </Button>
-                    <Button onClick={() => router.push("/manager/room-types")} variant="outline" className="bg-slate-800 text-white border-slate-700">
-                      Room Types
-                    </Button>
-                    <Button onClick={() => router.push("/manager/rooms")} variant="outline" className="bg-slate-800 text-white border-slate-700">
-                      Rooms Inventory
-                    </Button>
-                    <Button onClick={() => router.push("/manager/refunds")} variant="outline" className="bg-orange-600 hover:bg-orange-700 text-white border-0">
-                      Refunds Queue
-                    </Button>
-                    <Button onClick={() => router.push("/manager/reviews")} variant="outline" className="bg-purple-600 hover:bg-purple-700 text-white border-0">
-                      Reviews Queue
-                    </Button>
-                    <Button onClick={() => router.push("/manager/audit")} variant="outline" className="bg-red-900 hover:bg-red-800 text-white border-0">
-                      Audit Logs
-                    </Button>
-                    <Button onClick={() => router.push("/manager/reports")} variant="outline" className="bg-blue-600 hover:bg-blue-700 text-white border-0">
-                      Reports
-                    </Button>
-                  </>
-                )}
-
-                {(profile.role === "ADMIN" || profile.role === "MANAGER" || profile.role === "RECEPTIONIST" || profile.role === "HOUSEKEEPER") && (
-                  <>
-                    <Button onClick={() => router.push("/manager/bookings")} variant="outline" className="bg-indigo-600 hover:bg-indigo-700 text-white border-0">
-                      Manage Bookings
-                    </Button>
-                    <Button onClick={() => router.push("/manager/board")} variant="outline" className="bg-slate-800 text-white border-slate-700">
-                      Status Board
-                    </Button>
-                  </>
-                )}
-
-                {(profile.role === "ADMIN" || profile.role === "MANAGER" || profile.role === "HOUSEKEEPER") && (
-                  <Button onClick={() => router.push("/housekeeper")} variant="outline" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0">
-                    Housekeeping Tasks
-                  </Button>
-                )}
-                
-                {profile.role === "CUSTOMER" && (
-                  <Button onClick={() => router.push("/bookings")} variant="outline" className="bg-slate-800 text-white border-slate-700">
-                    View All Bookings
-                  </Button>
-                )}
-              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function MetricCard({ title, value }: { title: string; value: string | number }) {
+function MetricCard({ title, value, highlight = false }: { title: string; value: string | number, highlight?: boolean }) {
   return (
-    <Card className="bg-slate-800 border-slate-700">
+    <Card className={`border-white/60 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] ${highlight ? 'bg-white' : 'bg-white/70'}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-slate-400">{title}</CardTitle>
+        <CardTitle className="text-[13px] uppercase tracking-wider font-bold text-gray-500">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold text-slate-100">{value ?? "-"}</div>
+        <div className="text-3xl font-serif font-bold text-gray-900">{value ?? "-"}</div>
       </CardContent>
     </Card>
   );

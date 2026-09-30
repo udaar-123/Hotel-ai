@@ -1,24 +1,21 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter, useParams } from "next/navigation";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function RoomImagesPage() {
   const router = useRouter();
   const params = useParams();
-  const [room, setRoom] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
-  const fetchRoom = async () => {
-    setLoading(true);
-    const res = await fetch(`/api/v1/rooms/${params.id}`);
-    const data = await res.json();
-    if (data.success) setRoom(data.data);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchRoom(); }, [params.id]);
+  const { data: resData, error, isLoading: loading, mutate } = useSWR(
+    params.id ? `/api/v1/rooms/${params.id}` : null,
+    fetcher
+  );
+  const room = resData?.data;
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -58,7 +55,7 @@ export default function RoomImagesPage() {
           isPrimary: room?.room_images?.length === 0 // First image is primary
         })
       });
-      fetchRoom();
+      mutate();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -70,47 +67,47 @@ export default function RoomImagesPage() {
     if (!confirm("Delete this image?")) return;
     try {
       await fetch(`/api/v1/rooms/${params.id}/images/${imageId}`, { method: "DELETE" });
-      fetchRoom();
+      mutate();
     } catch (err) {
       console.error(err);
     }
   };
 
-  if (loading) return <div className="p-8 text-white">Loading...</div>;
-  if (!room) return <div className="p-8 text-white">Room not found</div>;
+  if (loading) return <div className="p-8 text-gray-900">Loading...</div>;
+  if (!room) return <div className="p-8 text-gray-900">Room not found</div>;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto text-white">
+    <div className="p-8 max-w-4xl mx-auto text-gray-900">
       <div className="flex items-center gap-4 mb-6">
-        <Button variant="outline" onClick={() => router.push("/manager/rooms")} className="bg-slate-800 border-slate-700">
+        <Button variant="outline" onClick={() => router.push("/manager/rooms")} className="bg-white border-gray-200">
           &larr; Back
         </Button>
         <h1 className="text-2xl font-bold">Images for Room {room.roomNumber}</h1>
       </div>
 
-      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
+      <div className="bg-white p-6 rounded-xl border border-gray-200 mb-8">
         <label className="block text-sm font-medium mb-2">Upload New Image</label>
         <input 
           type="file" 
           accept="image/*" 
           onChange={handleUpload}
           disabled={uploading}
-          className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
         />
-        {uploading && <p className="text-sm text-indigo-400 mt-2">Uploading...</p>}
+        {uploading && <p className="text-sm text-gray-900 mt-2">Uploading...</p>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {room.room_images?.map((img: any) => (
-          <div key={img.id} className="relative group bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+          <div key={img.id} className="relative group bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
             <div className="aspect-video relative">
               {/* Using img tag to avoid domain configuration issues for Next Image */}
               <img src={img.url} alt="Room" className="object-cover w-full h-full" />
               {img.isPrimary && (
-                <div className="absolute top-2 left-2 bg-indigo-600 text-xs px-2 py-1 rounded">Primary</div>
+                <div className="absolute top-2 left-2 bg-black text-xs px-2 py-1 rounded">Primary</div>
               )}
             </div>
-            <div className="p-3 bg-slate-800 flex justify-end">
+            <div className="p-3 bg-white flex justify-end">
               <Button variant="destructive" size="sm" onClick={() => deleteImage(img.id)}>Delete</Button>
             </div>
           </div>

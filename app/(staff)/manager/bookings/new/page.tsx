@@ -178,7 +178,7 @@ export default function NewWalkInBooking() {
         <button 
           type="submit" 
           disabled={submitting}
-          className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+          className="w-full py-2 bg-black text-white rounded hover:bg-gray-800 font-medium"
         >
           {submitting ? "Submitting..." : "Create Booking"}
         </button>

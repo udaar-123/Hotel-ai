@@ -47,20 +47,20 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
-      <div className="w-full max-w-md bg-slate-800 rounded-2xl p-8 shadow-2xl border border-slate-700">
-        <h2 className="text-2xl font-bold text-white mb-2">Change Password</h2>
-        <p className="text-slate-400 mb-6">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl p-8 shadow-2xl border border-gray-200">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Change Password</h2>
+        <p className="text-gray-500 mb-6">
           This is your first time logging in. Please change your password to continue.
         </p>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">New Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">New Password</label>
             <input
               {...form.register("password")}
               type="password"
-              className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             {form.formState.errors.password && (
               <p className="text-red-400 text-xs mt-1.5">{form.formState.errors.password.message}</p>
@@ -68,11 +68,11 @@ export default function ChangePasswordPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Confirm Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm Password</label>
             <input
               {...form.register("confirmPassword")}
               type="password"
-              className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             {form.formState.errors.confirmPassword && (
               <p className="text-red-400 text-xs mt-1.5">{form.formState.errors.confirmPassword.message}</p>
@@ -81,7 +81,7 @@ export default function ChangePasswordPage() {
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
 
-          <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 mt-4">
+          <Button type="submit" disabled={loading} className="w-full bg-black hover:bg-gray-800 text-white rounded-xl py-3 mt-4">
             {loading ? "Updating..." : "Update Password"}
           </Button>
         </form>

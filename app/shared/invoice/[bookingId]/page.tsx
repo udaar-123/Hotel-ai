@@ -1,33 +1,17 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { use } from "react";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function InvoicePage({ params }: { params: Promise<{ bookingId: string }> }) {
   const resolvedParams = use(params);
   const { bookingId } = resolvedParams;
-  const [invoice, setInvoice] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    async function fetchInvoice() {
-      try {
-        const res = await fetch(`/api/v1/invoices/${bookingId}`);
-        const json = await res.json();
-        if (json.success) {
-          setInvoice(json.data);
-        } else {
-          setError(json.error || "Failed to load invoice.");
-        }
-      } catch (err) {
-        console.error(err);
-        setError("Error loading invoice.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchInvoice();
-  }, [bookingId]);
+  const { data: resData, error: swrError, isLoading: loading } = useSWR(`/api/v1/invoices/${bookingId}`, fetcher);
+  
+  const invoice = resData?.success ? resData.data : null;
+  const error = swrError?.message || (!resData?.success && resData?.error ? resData.error : "");
 
   if (loading) return <div className="p-8 text-center text-gray-500">Loading invoice...</div>;
   if (error || !invoice) return <div className="p-8 text-center text-red-500">{error || "Invoice not found"}</div>;
@@ -42,7 +26,7 @@ export default function InvoicePage({ params }: { params: Promise<{ bookingId: s
       <div className="w-full max-w-[210mm] min-h-[297mm] bg-white shadow-lg p-10 relative">
         <button 
           onClick={() => window.print()} 
-          className="no-print absolute top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow"
+          className="no-print absolute top-4 right-4 bg-black text-white px-4 py-2 rounded hover:bg-gray-800 shadow"
         >
           Print to PDF
         </button>

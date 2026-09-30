@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 
 interface Review {
   id: string;
@@ -10,26 +11,11 @@ interface Review {
   bookings?: { checkInDate: string; checkOutDate: string };
 }
 
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
 export default function ModerationQueuePage() {
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchReviews = async () => {
-    try {
-      const res = await fetch("/api/v1/reviews/moderation-queue");
-      if (!res.ok) throw new Error("Failed to fetch moderation queue");
-      const data = await res.json();
-      setReviews(data.data || data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchReviews();
-  }, []);
+  const { data: resData, error, isLoading, mutate } = useSWR("/api/v1/reviews/moderation-queue", fetcher);
+  const reviews: Review[] = resData ? (resData.data || resData) : [];
 
   const handleModerate = async (id: string, action: "PUBLISHED" | "REJECTED") => {
     try {
@@ -39,7 +25,7 @@ export default function ModerationQueuePage() {
         body: JSON.stringify({ action }),
       });
       if (!res.ok) throw new Error(`Failed to ${action.toLowerCase()} review`);
-      fetchReviews();
+      mutate();
     } catch (error) {
       console.error(error);
       alert(`Error trying to ${action.toLowerCase()} review`);
@@ -50,7 +36,7 @@ export default function ModerationQueuePage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-slate-100">Review Moderation Queue</h1>
+      <h1 className="text-3xl font-bold mb-6 text-gray-900">Review Moderation Queue</h1>
       
       {reviews.length === 0 ? (
         <div className="bg-white p-6 rounded shadow text-slate-900">

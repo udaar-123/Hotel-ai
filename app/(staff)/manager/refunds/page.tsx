@@ -1,28 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function RefundsPage() {
-  const [refunds, setRefunds] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchRefunds = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/v1/refunds");
-      if (!res.ok) throw new Error("Failed to fetch refunds");
-      const data = await res.json();
-      setRefunds(data.data || data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRefunds();
-  }, []);
+  const { data: resData, error, isLoading, mutate } = useSWR("/api/v1/refunds", fetcher);
+  const refunds = resData ? (resData.data || resData) : [];
 
   const handleAction = async (id: string, action: "APPROVE" | "REJECT") => {
     if (!confirm(`Are you sure you want to ${action.toLowerCase()} this refund?`)) return;
@@ -35,7 +20,7 @@ export default function RefundsPage() {
       });
       if (!res.ok) throw new Error(`Failed to ${action.toLowerCase()} refund`);
       alert(`Refund ${action.toLowerCase()}d successfully`);
-      fetchRefunds();
+      mutate();
     } catch (error) {
       console.error(error);
       alert(`Error trying to ${action.toLowerCase()} refund`);
@@ -47,7 +32,7 @@ export default function RefundsPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto text-slate-100">
+    <div className="p-6 max-w-6xl mx-auto text-gray-900">
       <h1 className="text-3xl font-bold mb-6">Refund Requests</h1>
 
       <div className="bg-white shadow rounded overflow-hidden text-slate-900">

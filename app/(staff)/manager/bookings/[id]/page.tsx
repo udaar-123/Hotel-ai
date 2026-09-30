@@ -1,33 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function BookingDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [booking, setBooking] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  
+  const { data: resData, error: swrError, isLoading: loading, mutate } = useSWR(
+    params.id ? `/api/v1/bookings/${params.id}` : null,
+    fetcher
+  );
+  const booking = resData?.data;
+
   const [actionLoading, setActionLoading] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const fetchBooking = async () => {
-    try {
-      const res = await fetch(`/api/v1/bookings/${params.id}`);
-      const json = await res.json();
-      if (json.success) {
-        setBooking(json.data);
-      } else {
-        setError("Failed to load booking.");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Error loading booking.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGenerateInvoice = async () => {
     setInvoiceLoading(true);
@@ -36,7 +27,7 @@ export default function BookingDetailPage() {
       const res = await fetch(`/api/v1/invoices/${params.id}/generate`, { method: "POST" });
       const json = await res.json();
       if (res.ok && (json.success || json.data)) {
-        await fetchBooking();
+        await mutate();
         window.open(`/shared/invoice/${params.id}`, "_blank");
       } else {
         setError(json.error?.message || "Failed to generate invoice");
@@ -49,12 +40,6 @@ export default function BookingDetailPage() {
     }
   };
 
-  useEffect(() => {
-    if (params.id) {
-      fetchBooking();
-    }
-  }, [params.id]);
-
   const handleAction = async (action: "check-in" | "check-out") => {
     setActionLoading(true);
     setError("");
@@ -64,7 +49,7 @@ export default function BookingDetailPage() {
       });
       const json = await res.json();
       if (json.success) {
-        await fetchBooking();
+        await mutate();
       } else {
         setError(json.error?.message || `Failed to ${action}`);
       }
@@ -155,7 +140,7 @@ export default function BookingDetailPage() {
                 {booking.invoices && booking.invoices.length > 0 ? (
                   <button 
                     onClick={() => window.open(`/shared/invoice/${booking.id}`, "_blank")}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
                   >
                     View Invoice
                   </button>

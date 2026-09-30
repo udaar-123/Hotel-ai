@@ -71,9 +71,9 @@ export default function CustomerLoginPage() {
       <div className="w-full max-w-md">
         {/* Logo / Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 mb-4 shadow-lg shadow-indigo-500/30">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-black mb-4 shadow-lg shadow-indigo-500/30">
             <svg
-              className="w-7 h-7 text-white"
+              className="w-7 h-7 text-gray-900"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -86,18 +86,18 @@ export default function CustomerLoginPage() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
             Hotel Management
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Customer Portal</p>
+          <p className="text-gray-500 text-sm mt-1">Customer Portal</p>
         </div>
 
         {/* Card */}
-        <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 shadow-2xl">
+        <div className="bg-white/60 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-8 shadow-2xl">
           {step === "request" ? (
             <>
-              <h2 className="text-lg font-semibold text-white mb-1">Sign in</h2>
-              <p className="text-slate-400 text-sm mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Sign in</h2>
+              <p className="text-gray-500 text-sm mb-6">
                 Enter your email or phone to receive a one-time code.
               </p>
               <form
@@ -105,14 +105,14 @@ export default function CustomerLoginPage() {
                 className="space-y-4"
               >
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Email or Phone
                   </label>
                   <input
                     {...requestForm.register("identifier")}
                     type="text"
                     placeholder="you@example.com or +91..."
-                    className="w-full px-4 py-3 rounded-xl bg-slate-900/70 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50/70 border border-gray-200 text-gray-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
                   />
                   {requestForm.formState.errors.identifier && (
                     <p className="text-red-400 text-xs mt-1.5">
@@ -128,7 +128,7 @@ export default function CustomerLoginPage() {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 font-medium transition-all"
+                  className="w-full bg-black hover:bg-gray-800 text-white rounded-xl py-3 font-medium transition-all"
                 >
                   {loading ? "Sending code..." : "Send OTP Code"}
                 </Button>
@@ -136,19 +136,19 @@ export default function CustomerLoginPage() {
             </>
           ) : (
             <>
-              <h2 className="text-lg font-semibold text-white mb-1">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">
                 Enter your code
               </h2>
-              <p className="text-slate-400 text-sm mb-6">
+              <p className="text-gray-500 text-sm mb-6">
                 We sent a 6-digit code to{" "}
-                <span className="text-indigo-400">{identifier}</span>.
+                <span className="text-gray-900">{identifier}</span>.
               </p>
               <form
                 onSubmit={verifyForm.handleSubmit(handleVerifyOtp)}
                 className="space-y-4"
               >
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     OTP Code
                   </label>
                   <input type="hidden" {...verifyForm.register("identifier")} />
@@ -157,7 +157,7 @@ export default function CustomerLoginPage() {
                     type="text"
                     placeholder="123456"
                     maxLength={6}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-900/70 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition text-center text-2xl tracking-widest"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50/70 border border-gray-200 text-gray-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition text-center text-2xl tracking-widest"
                   />
                   {verifyForm.formState.errors.code && (
                     <p className="text-red-400 text-xs mt-1.5">
@@ -173,7 +173,7 @@ export default function CustomerLoginPage() {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 font-medium transition-all"
+                  className="w-full bg-black hover:bg-gray-800 text-white rounded-xl py-3 font-medium transition-all"
                 >
                   {loading ? "Verifying..." : "Verify & Sign In"}
                 </Button>
@@ -184,7 +184,7 @@ export default function CustomerLoginPage() {
                     setError("");
                     verifyForm.reset();
                   }}
-                  className="w-full text-slate-400 hover:text-white text-sm transition"
+                  className="w-full text-gray-500 hover:text-gray-900 text-sm transition"
                 >
                   ← Try a different email/phone
                 </button>
@@ -192,10 +192,10 @@ export default function CustomerLoginPage() {
             </>
           )}
 
-          <div className="mt-6 pt-6 border-t border-slate-700/50 text-center">
+          <div className="mt-6 pt-6 border-t border-gray-200/50 text-center">
             <Link
               href="/auth/staff/login"
-              className="text-slate-400 hover:text-indigo-400 text-sm transition"
+              className="text-gray-500 hover:text-gray-900 text-sm transition"
             >
               Staff login →
             </Link>

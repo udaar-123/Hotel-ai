@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import useSWR from "swr";
 
 type AuditLog = {
   id: string;
@@ -15,34 +16,20 @@ type AuditLog = {
   } | null;
 };
 
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
 export default function AuditLogsPage() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState("All");
 
-  useEffect(() => {
-    const fetchLogs = async () => {
-      setIsLoading(true);
-      try {
-        const url = actionFilter === "All" 
-          ? "/api/v1/audit" 
-          : `/api/v1/audit?action=${encodeURIComponent(actionFilter)}`;
-        
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch audit logs");
-        const data = await res.json();
-        
-        // Handle API returning either an array directly or inside a data property
-        setLogs(Array.isArray(data) ? data : data.data || []);
-      } catch (error) {
-        console.error("Error fetching audit logs:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const url = actionFilter === "All" 
+    ? "/api/v1/audit" 
+    : `/api/v1/audit?action=${encodeURIComponent(actionFilter)}`;
 
-    fetchLogs();
-  }, [actionFilter]);
+  const { data: resData, error, isLoading } = useSWR(url, fetcher);
+  
+  const data = resData || [];
+  const logs = Array.isArray(data) ? data : data.data || [];
+
 
   return (
     <div className="p-6">
@@ -50,7 +37,7 @@ export default function AuditLogsPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Audit Logs</h1>
-            <p className="text-sm text-slate-500 mt-1">Immutable system audit trail.</p>
+            <p className="text-sm text-gray-400 mt-1">Immutable system audit trail.</p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-2">
             <label htmlFor="action-filter" className="text-sm font-medium text-slate-700">
@@ -74,7 +61,7 @@ export default function AuditLogsPage() {
         <div className="bg-white shadow-sm rounded-lg border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-900 text-white">
+              <thead className="bg-gray-50 text-gray-900">
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left font-semibold tracking-wider">Date/Time</th>
                   <th scope="col" className="px-6 py-3 text-left font-semibold tracking-wider">Actor</th>
@@ -106,7 +93,7 @@ export default function AuditLogsPage() {
                   ))
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500 font-sans text-sm">
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-sans text-sm">
                       No audit logs found.
                     </td>
                   </tr>
@@ -121,7 +108,7 @@ export default function AuditLogsPage() {
                           {log.users?.name || log.users?.email || "System"}
                         </div>
                         {log.users?.name && (
-                          <div className="text-slate-500 text-xs mt-0.5">{log.users.email}</div>
+                          <div className="text-gray-400 text-xs mt-0.5">{log.users.email}</div>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

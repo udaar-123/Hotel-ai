@@ -2,13 +2,17 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const { id } = resolvedParams;
   const router = useRouter();
-  const [booking, setBooking] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: resData, error: fetchError, isLoading, mutate: fetchBooking } = useSWR(`/api/v1/bookings/${id}`, fetcher);
+  const booking = resData?.data || resData;
+
   const [isCancelling, setIsCancelling] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -17,19 +21,6 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const [reviewComment, setReviewComment] = useState("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
-
-  const fetchBooking = async () => {
-    try {
-      const res = await fetch(`/api/v1/bookings/${id}`);
-      if (!res.ok) throw new Error("Failed to fetch booking");
-      const resData = await res.json();
-      setBooking(resData.data || resData);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleGenerateInvoice = async () => {
     setInvoiceLoading(true);
@@ -51,8 +42,6 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   };
 
   useEffect(() => {
-    fetchBooking();
-    
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
@@ -229,7 +218,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const canRefund = booking.status === "CANCELLED" && (booking.payments?.status === "COMPLETED" || booking.totalAmount > 0) && !booking.payments?.refunds;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto text-slate-100">
+    <div className="p-6 max-w-3xl mx-auto text-gray-900">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Booking Details</h1>
         <button onClick={() => router.back()} className="text-blue-400 hover:underline">← Back</button>
@@ -307,7 +296,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
           booking.invoices && booking.invoices.length > 0 ? (
             <button 
               onClick={() => window.open(`/shared/invoice/${booking.id}`, "_blank")}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
             >
               View Invoice
             </button>
@@ -343,7 +332,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
               <button 
                 onClick={uploadIdentityDocument}
                 disabled={!uploadFile || isUploading}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 disabled:opacity-50"
               >
                 {isUploading ? "Uploading..." : "Upload Document"}
               </button>
@@ -381,7 +370,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <button 
               type="submit" 
               disabled={isSubmittingReview}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+              className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 disabled:opacity-50"
             >
               {isSubmittingReview ? "Submitting..." : "Submit Review"}
             </button>

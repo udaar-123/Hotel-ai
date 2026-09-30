@@ -1,23 +1,14 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { RoomStatus } from "@/modules/rooms/types";
 import { Button } from "@/components/ui/button";
 
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
 export default function RoomBoardPage() {
-  const [rooms, setRooms] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchRooms = () => {
-    setLoading(true);
-    fetch("/api/v1/rooms")
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setRooms(data.data);
-      })
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { fetchRooms(); }, []);
+  const { data: resData, error, isLoading: loading, mutate } = useSWR("/api/v1/rooms", fetcher);
+  const rooms = resData?.success ? resData.data : [];
 
   const changeStatus = async (id: string, newStatus: string) => {
     try {
@@ -27,7 +18,7 @@ export default function RoomBoardPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
-        fetchRooms();
+        mutate();
       } else {
         const data = await res.json();
         alert(data.error?.message || "Failed to update status");
@@ -45,7 +36,7 @@ export default function RoomBoardPage() {
       case RoomStatus.CHECKED_OUT: return "bg-orange-500/20 text-orange-400 border-orange-500/50";
       case RoomStatus.CLEANING: return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
       case RoomStatus.MAINTENANCE: return "bg-red-500/20 text-red-400 border-red-500/50";
-      default: return "bg-slate-800 text-slate-400";
+      default: return "bg-white text-gray-500";
     }
   };
 
@@ -62,14 +53,14 @@ export default function RoomBoardPage() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto text-white">
+    <div className="p-8 max-w-6xl mx-auto text-gray-900">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Room Status Board</h1>
-        <Button onClick={fetchRooms} variant="outline" className="bg-slate-800 text-white border-slate-700">Refresh</Button>
+        <Button onClick={() => mutate()} variant="outline" className="bg-white text-gray-900 border-gray-200 hover:bg-gray-50">Refresh</Button>
       </div>
 
       {loading ? (
-        <p className="text-slate-400">Loading...</p>
+        <p className="text-gray-500">Loading...</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {rooms.map(room => (
@@ -101,7 +92,7 @@ export default function RoomBoardPage() {
               </div>
             </div>
           ))}
-          {rooms.length === 0 && <p className="col-span-full text-slate-400">No rooms found.</p>}
+          {rooms.length === 0 && <p className="col-span-full text-gray-500">No rooms found.</p>}
         </div>
       )}
     </div>

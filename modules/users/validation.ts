@@ -17,6 +17,7 @@ export const UpdateStaffSchema = z.object({
 export const UpdateProfileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").optional(),
   phone: z.string().optional(),
+  avatarUrl: z.string().optional(),
 });
 
 export const ChangePasswordSchema = z.object({

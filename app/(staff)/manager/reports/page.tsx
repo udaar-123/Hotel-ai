@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function ReportsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const [occupancyData, setOccupancyData] = useState<any>(null);
-  const [revenueData, setRevenueData] = useState<any>(null);
-  const [bookingsSummary, setBookingsSummary] = useState<any>(null);
+  const [appliedDates, setAppliedDates] = useState<{start: string, end: string} | null>(null);
 
   useEffect(() => {
     // Set default to last 30 days
@@ -21,30 +20,25 @@ export default function ReportsPage() {
     setStartDate(thirtyDaysAgo.toISOString().split("T")[0]);
   }, []);
 
-  const fetchReports = async () => {
+  const qs = appliedDates ? `?startDate=${appliedDates.start}&endDate=${appliedDates.end}` : null;
+  const { data: occRes, isLoading: occLoading, mutate: mutateOcc } = useSWR(qs ? `/api/v1/reports/occupancy${qs}` : null, fetcher);
+  const { data: revRes, isLoading: revLoading, mutate: mutateRev } = useSWR(qs ? `/api/v1/reports/revenue${qs}` : null, fetcher);
+  const { data: bookRes, isLoading: bookLoading, mutate: mutateBook } = useSWR(qs ? `/api/v1/reports/bookings-summary${qs}` : null, fetcher);
+
+  const occupancyData = occRes?.data;
+  const revenueData = revRes?.data;
+  const bookingsSummary = bookRes?.data;
+
+  const loading = occLoading || revLoading || bookLoading;
+
+  const fetchReports = () => {
     if (!startDate || !endDate) return;
-
-    setLoading(true);
-    try {
-      const qs = `?startDate=${startDate}&endDate=${endDate}`;
-      const [occRes, revRes, bookRes] = await Promise.all([
-        fetch(`/api/v1/reports/occupancy${qs}`),
-        fetch(`/api/v1/reports/revenue${qs}`),
-        fetch(`/api/v1/reports/bookings-summary${qs}`)
-      ]);
-
-      const occData = await occRes.json();
-      const revData = await revRes.json();
-      const bookData = await bookRes.json();
-
-      setOccupancyData(occData.data);
-      setRevenueData(revData.data);
-      setBookingsSummary(bookData.data);
-    } catch (error) {
-      console.error("Error fetching reports", error);
-      alert("Failed to fetch reports.");
-    } finally {
-      setLoading(false);
+    if (appliedDates?.start === startDate && appliedDates?.end === endDate) {
+      mutateOcc();
+      mutateRev();
+      mutateBook();
+    } else {
+      setAppliedDates({ start: startDate, end: endDate });
     }
   };
 
@@ -124,7 +118,7 @@ export default function ReportsPage() {
           <button 
             onClick={fetchReports} 
             disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+            className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 disabled:opacity-50"
           >
             {loading ? "Fetching..." : "Fetch Reports"}
           </button>

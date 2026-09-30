@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 type Room = {
   id: string;
@@ -12,27 +14,9 @@ type Room = {
 };
 
 export default function HousekeeperDashboard() {
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchRooms = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/v1/rooms/housekeeping-queue");
-      if (!res.ok) throw new Error("Failed to fetch queue");
-      const json = await res.json();
-      setRooms(json.data || []);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRooms();
-  }, []);
+  const { data: resData, error: swrError, isLoading: loading, mutate: fetchRooms } = useSWR("/api/v1/rooms/housekeeping-queue", fetcher);
+  const rooms = resData?.data || [];
+  const error = swrError?.message || null;
 
   const updateStatus = async (roomId: string, newStatus: string) => {
     try {
@@ -102,7 +86,7 @@ export default function HousekeeperDashboard() {
               {room.status === "CHECKED_OUT" && (
                 <button
                   onClick={() => updateStatus(room.id, "CLEANING")}
-                  className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold text-lg shadow-sm transition-colors"
+                  className="w-full py-4 px-4 bg-black hover:bg-gray-800 active:bg-blue-800 text-white rounded-xl font-bold text-lg shadow-sm transition-colors"
                 >
                   Start Cleaning
                 </button>

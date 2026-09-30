@@ -1,9 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 const CreateStaffSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -12,9 +15,10 @@ const CreateStaffSchema = z.object({
 });
 
 export default function ManagerStaffPage() {
-  const [staff, setStaff] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  const { data: resData, error, isLoading: loading, mutate } = useSWR("/api/v1/users/staff", fetcher);
+  const staff = resData?.success ? resData.data : [];
   
   type FormValues = z.infer<typeof CreateStaffSchema>;
   
@@ -22,20 +26,6 @@ export default function ManagerStaffPage() {
     resolver: zodResolver(CreateStaffSchema),
     defaultValues: { name: "", email: "", role: "RECEPTIONIST" },
   });
-
-  const fetchStaff = () => {
-    setLoading(true);
-    fetch("/api/v1/users/staff")
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setStaff(data.data);
-      })
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchStaff();
-  }, []);
 
   const onSubmit = async (data: any) => {
     try {
@@ -50,7 +40,7 @@ export default function ManagerStaffPage() {
       }
       setIsDialogOpen(false);
       form.reset();
-      fetchStaff();
+      mutate();
     } catch (e: any) {
       alert(e.message);
     }
@@ -63,53 +53,53 @@ export default function ManagerStaffPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deactivated: !currentlyDeactivated }),
       });
-      if (res.ok) fetchStaff();
+      if (res.ok) mutate();
     } catch (e) {
       console.error(e);
     }
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto text-white">
+    <div className="p-8 max-w-6xl mx-auto text-gray-900">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Manage Staff</h1>
-        <Button onClick={() => setIsDialogOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button onClick={() => setIsDialogOpen(true)} className="bg-black hover:bg-gray-800">
           + Create Staff
         </Button>
       </div>
 
       {isDialogOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 p-6 rounded-xl max-w-md w-full border border-slate-700">
+          <div className="bg-white p-6 rounded-xl max-w-md w-full border border-gray-200">
             <h2 className="text-xl font-bold mb-4">Create New Staff</h2>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <div>
                 <label className="block text-sm mb-1">Name</label>
-                <input {...form.register("name")} className="w-full px-4 py-2 rounded bg-slate-900 border border-slate-700" />
+                <input {...form.register("name")} className="w-full px-4 py-2 rounded bg-gray-50 border border-gray-200" />
               </div>
               <div>
                 <label className="block text-sm mb-1">Email</label>
-                <input {...form.register("email")} className="w-full px-4 py-2 rounded bg-slate-900 border border-slate-700" />
+                <input {...form.register("email")} className="w-full px-4 py-2 rounded bg-gray-50 border border-gray-200" />
               </div>
               <div>
                 <label className="block text-sm mb-1">Role</label>
-                <select {...form.register("role")} className="w-full px-4 py-2 rounded bg-slate-900 border border-slate-700 text-white">
+                <select {...form.register("role")} className="w-full px-4 py-2 rounded bg-gray-50 border border-gray-200 text-gray-900">
                   <option value="RECEPTIONIST">Receptionist</option>
                   <option value="HOUSEKEEPER">Housekeeper</option>
                 </select>
               </div>
               <div className="flex justify-end gap-2 mt-4">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="bg-slate-700 hover:bg-slate-600 border-0">Cancel</Button>
-                <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700">Create</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-900 border-0">Cancel</Button>
+                <Button type="submit" className="bg-black hover:bg-gray-800">Create</Button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-200">
         <table className="w-full text-left text-sm">
-          <thead className="bg-slate-900">
+          <thead className="bg-gray-50">
             <tr>
               <th className="p-4 font-medium">Name</th>
               <th className="p-4 font-medium">Role</th>
@@ -122,10 +112,10 @@ export default function ManagerStaffPage() {
             {loading ? (
               <tr><td colSpan={5} className="p-4 text-center">Loading...</td></tr>
             ) : staff.length === 0 ? (
-              <tr><td colSpan={5} className="p-4 text-center text-slate-400">No staff found</td></tr>
+              <tr><td colSpan={5} className="p-4 text-center text-gray-500">No staff found</td></tr>
             ) : (
               staff.map(s => (
-                <tr key={s.id} className="border-t border-slate-700/50">
+                <tr key={s.id} className="border-t border-gray-200/50">
                   <td className="p-4">{s.name}</td>
                   <td className="p-4">{s.role}</td>
                   <td className="p-4">{s.email}</td>
