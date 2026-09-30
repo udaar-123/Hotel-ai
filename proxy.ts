@@ -7,6 +7,7 @@ const ROLE_ROUTE_MAP: Record<string, string[]> = {
   '/manager/refunds': ['ADMIN', 'MANAGER'],
   '/manager/reviews': ['ADMIN', 'MANAGER'],
   '/manager/audit': ['ADMIN', 'MANAGER'],
+  '/manager/reports': ['ADMIN', 'MANAGER'],
   '/manager': ['ADMIN', 'MANAGER'],
   '/housekeeper': ['ADMIN', 'MANAGER', 'HOUSEKEEPER'],
   '/dashboard': ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPER', 'CUSTOMER'],

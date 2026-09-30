@@ -205,6 +205,9 @@ export default function DashboardPage() {
                     <Button onClick={() => router.push("/manager/audit")} variant="outline" className="bg-red-900 hover:bg-red-800 text-white border-0">
                       Audit Logs
                     </Button>
+                    <Button onClick={() => router.push("/manager/reports")} variant="outline" className="bg-blue-600 hover:bg-blue-700 text-white border-0">
+                      Reports
+                    </Button>
                   </>
                 )}
 

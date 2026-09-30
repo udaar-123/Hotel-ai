@@ -12,7 +12,8 @@ export type Permission =
   | "staff:create:staff"
   | "audit:view:all"
   | "audit:view:scoped"
-  | "housekeeping:view";
+  | "housekeeping:view"
+  | "reports:view";
 
 export const RolePermissions: Record<UserRole, Permission[]> = {
   [UserRole.ADMIN]: [
@@ -28,6 +29,7 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     "audit:view:all",
     "audit:view:scoped",
     "housekeeping:view",
+    "reports:view",
   ],
   [UserRole.MANAGER]: [
     "room:create",
@@ -40,6 +42,7 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     "staff:create:staff",
     "audit:view:scoped",
     "housekeeping:view",
+    "reports:view",
   ],
   [UserRole.RECEPTIONIST]: [
     "room:status:update",
