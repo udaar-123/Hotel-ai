@@ -9,7 +9,7 @@ export function hasPermission(role: UserRole | undefined, permission: Permission
 }
 
 export function authorize(
-  user: { role?: UserRole | string } | null | undefined,
+  user: { id?: string; role?: UserRole | string } | null | undefined,
   permission: Permission
 ): void {
   if (!user) {

@@ -57,7 +57,8 @@ export const ReportsService = {
 
     for (const p of payments) {
       totalRevenue += p.amount;
-      byMethod[p.method] = (byMethod[p.method] || 0) + p.amount;
+      const method = p.method || "UNKNOWN";
+      byMethod[method] = (byMethod[method] || 0) + p.amount;
       
       const roomType = p.bookings?.rooms?.room_types?.name || "Unknown";
       byRoomType[roomType] = (byRoomType[roomType] || 0) + p.amount;

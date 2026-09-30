@@ -28,7 +28,7 @@ export default function NewWalkInBooking() {
   const [error, setError] = useState("");
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as any,
     defaultValues: {
       guests: 1,
       amountPaid: 0,

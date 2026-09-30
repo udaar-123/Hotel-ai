@@ -3,12 +3,12 @@ import { startOfDay, endOfDay } from "date-fns";
 
 export const DashboardService = {
   async getCustomerDashboard(userId: string) {
-    const today = new Date();
+    const today = startOfDay(new Date());
     
     const upcomingBookings = await prisma.bookings.findMany({
       where: {
         userId,
-        checkInDate: { gte: today },
+        checkOutDate: { gte: today },
         status: { in: ["CONFIRMED", "PENDING_PAYMENT", "CHECKED_IN"] }
       },
       include: { rooms: { include: { room_types: true } } },
@@ -20,7 +20,7 @@ export const DashboardService = {
       where: {
         userId,
         checkOutDate: { lt: today },
-        status: "CHECKED_OUT"
+        status: { in: ["CHECKED_OUT", "CANCELLED"] }
       }
     });
 

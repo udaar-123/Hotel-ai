@@ -20,7 +20,7 @@ export default function RoomTypesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(CreateRoomTypeSchema),
+    resolver: zodResolver(CreateRoomTypeSchema) as any,
     defaultValues: { name: "", description: "", basePrice: 100, capacity: 2 },
   });
 
