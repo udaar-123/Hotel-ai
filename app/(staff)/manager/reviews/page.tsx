@@ -56,7 +56,7 @@ export default function ModerationQueuePage() {
                     Stay: {new Date(review.bookings.checkInDate).toLocaleDateString()} - {new Date(review.bookings.checkOutDate).toLocaleDateString()}
                   </p>
                 )}
-                <p className="text-gray-700 italic mb-6">"{review.comment}"</p>
+                <p className="text-gray-700 italic mb-6">&ldquo;{review.comment}&rdquo;</p>
               </div>
               
               <div className="flex gap-2 mt-auto">

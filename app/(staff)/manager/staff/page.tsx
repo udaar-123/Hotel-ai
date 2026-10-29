@@ -114,7 +114,7 @@ export default function ManagerStaffPage() {
             ) : staff.length === 0 ? (
               <tr><td colSpan={5} className="p-4 text-center text-gray-500">No staff found</td></tr>
             ) : (
-              staff.map(s => (
+              staff.map((s: any) => (
                 <tr key={s.id} className="border-t border-gray-200/50">
                   <td className="p-4">{s.name}</td>
                   <td className="p-4">{s.role}</td>

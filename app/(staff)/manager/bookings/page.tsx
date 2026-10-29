@@ -36,7 +36,7 @@ export default function BookingsPage() {
               </tr>
             </thead>
             <tbody>
-              {bookings.map((b) => (
+              {bookings.map((b: any) => (
                 <tr key={b.id} className="hover:bg-gray-50 border-b">
                   <td className="px-4 py-3 text-slate-900 font-mono">{b.id.substring(0, 8)}</td>
                   <td className="px-4 py-3 text-slate-900">{b.booking_guests?.[0]?.name || "N/A"}</td>

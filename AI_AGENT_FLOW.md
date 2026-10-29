@@ -1,34 +1,45 @@
 # How the Role-Aware AI Agent Works
 
-The AI ChatWidget in this application is not just a standard chatbot; it is a **Role-Aware Agentic System** built with the Vercel AI SDK and Groq (currently running `qwen/qwen3.8-27b`). It dynamically adapts its behavior, personality, and capabilities based on who is logged in.
+The AI ChatWidget in this application is a **Role-Aware Agentic System** built with the Vercel AI SDK and Groq (`qwen/qwen3.8-27b`). It dynamically adapts its behavior, system prompt, and callable tools based on the authenticated user's role.
 
-Here is the exact step-by-step logic executing in `app/api/chat/route.ts`:
+Here is the step-by-step logic executing in `app/api/chat/route.ts`:
 
 ### 1. Authentication & Role Detection
-When you type a message in the chat widget on the frontend, the request is sent to the Next.js API route (`/api/chat`). The very first thing the code does is securely decrypt your HTTP-only `session` cookie.
-* **If you aren't logged in**, it defaults you to a `"GUEST"` role.
-* **If you are logged in**, it extracts your exact role (e.g., `"CUSTOMER"`, `"MANAGER"`, `"ADMIN"`).
+When a user sends a message in the chat widget, the request hits `/api/chat` (`app/api/chat/route.ts`), which decrypts the HTTP-only `session` cookie:
+* **Unauthenticated visitors** default to `"GUEST"`.
+* **Authenticated users** resolve to their RBAC role (`"CUSTOMER"`, `"HOUSEKEEPER"`, `"RECEPTIONIST"`, `"MANAGER"`, or `"ADMIN"`).
 
-### 2. Dynamic System Prompting
-Based on your detected role, the API constructs a dynamic "System Prompt". This is a set of hidden instructions that tells the AI how to behave before it even sees your message:
-* **Customers & Guests:** The prompt tells the AI to act as a *polite hotel concierge*.
-* **Managers & Admins:** The prompt transforms the AI into a *high-level hotel operations assistant* focused on data and analytics.
+### 2. Dynamic System Prompting & Agentic Tool Injection
+Each role receives a tailored persona and strict tool scoping so users can only invoke actions permitted for their role:
 
-### 3. Agentic Tool Injection (Function Calling)
-This is where the "Agent" part comes in. We inject specific Javascript functions (Tools) directly into the AI's "brain" based on your role:
-* **Customers** are granted the `checkAvailability` tool and the `getMyBookings` tool.
-* **Managers** are granted the `getOccupancyReport` and `getRevenueReport` tools.
-
-*(For example, a Customer literally cannot ask the AI for revenue data because the AI is never granted the `getRevenueReport` tool when a Customer is logged in!)*
-
-### 4. The Reasoning Loop (`maxSteps: 3`)
-When a Manager asks a question like *"How much revenue did we make this month?"*:
-1. The AI receives the text.
-2. It realizes it cannot answer this from its training data.
-3. It halts text generation and executes a **Tool Call** requesting to trigger `getRevenueReport(startDate, endDate)`.
-4. Our Next.js backend intercepts this tool call and executes the `ReportsService.getRevenue()` Prisma query against your PostgreSQL database.
-5. The raw JSON database response is fed *back* to the AI.
-6. The AI finally generates a natural language response summarizing the revenue data for you.
-
-### 5. Blazing-Fast Streaming
-Instead of waiting for this entire loop to finish, the Vercel AI SDK streams the output back to the frontend chunk-by-chunk using `toTextStreamResponse()`. Because we've now switched the engine to **Groq's Qwen 3.8 27B model**, this entire database reasoning loop executes in milliseconds.
+* **GUEST:**
+  * `checkAvailability` — Search available room types by check-in/out dates and guest count.
+* **CUSTOMER:**
+  * `checkAvailability`, `getCustomerDashboard`, `getMyBookings`, `bookRoom`
+  * `cancelMyBooking` — Cancel an existing reservation.
+  * `requestBookingRefund` — Request a refund for a completed booking payment.
+  * `submitStayReview` — Submit a 1–5 star rating and comment for a checked-out stay.
+  * `getMyBookingInvoice` — Generate or retrieve an invoice for a booking.
+* **HOUSEKEEPER:**
+  * `getHousekeepingQueue` — View rooms in `CHECKED_OUT`, `CLEANING`, or `MAINTENANCE` status.
+  * `updateRoomStatus` — Transition room states (`CHECKED_OUT` → `CLEANING` → `AVAILABLE` / `MAINTENANCE`).
+  * `getRoomStatusBoard` — View the live status board for all rooms.
+* **RECEPTIONIST:**
+  * `getFrontDeskOverview` — View today's arrivals, departures, available rooms, and occupied rooms.
+  * `getAllBookings` — Search and filter hotel bookings by status or guest name.
+  * `checkInGuest` / `checkOutGuest` — Perform front-desk guest check-in and check-out.
+  * `createWalkInBooking` — Create offline/walk-in bookings with cash payment tracking.
+  * `generateBookingInvoice` — Generate or fetch booking invoices.
+  * `getRoomStatusBoard` / `updateRoomStatus` — View and update room statuses.
+* **MANAGER:**
+  * Includes all **Housekeeper** and **Receptionist** operational tools, plus:
+  * `getManagerDashboard`, `getOccupancyReport`, `getRevenueReport`, `getBookingsSummaryReport`
+  * `listStaffMembers`, `createStaffMember`, `toggleStaffStatus` (manage Receptionists & Housekeepers)
+  * `listRoomTypes`, `createRoomType`, `createRoom` (inventory management)
+  * `getRefundQueue`, `processRefundRequest` (approve/reject refunds)
+  * `getPendingReviews`, `moderateReview` (publish/reject customer reviews)
+  * `getAuditLogs` (inspect system audit trail)
+* **ADMIN:**
+  * Includes all **Manager**, **Receptionist**, and **Housekeeper** tools, plus:
+  * `getAdminDashboard` — View platform-wide revenue, total hotels, and active managers.
+  * `listManagers`, `createManager` — Onboard and manage hotel Managers (`toggleStaffStatus` also supports activating/deactivating Managers for Admins).

@@ -55,7 +55,7 @@ export default function RefundsPage() {
                 </td>
               </tr>
             ) : (
-              refunds.map((refund) => (
+              refunds.map((refund: any) => (
                 <tr key={refund.id} className="border-b hover:bg-gray-50">
                   <td className="p-4">{refund.id}</td>
                   <td className="p-4">{refund.payments?.bookingId || 'N/A'}</td>

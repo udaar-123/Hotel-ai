@@ -76,7 +76,7 @@ export const ReportsService = {
       select: { status: true, totalAmount: true }
     });
 
-    let totalBookings = bookings.length;
+    const totalBookings = bookings.length;
     let totalValue = 0;
     const byStatus: Record<string, number> = {};
 

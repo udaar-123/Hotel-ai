@@ -20,12 +20,14 @@ export const UsersService = {
 
   async createStaff(
     currentUser: { id: string; role: UserRole },
-    data: { name: string; email: string; role: UserRole }
+    data: { name: string; email: string; role: UserRole | string }
   ) {
+    const normalizedRole = (typeof data.role === "string" ? data.role.trim().toUpperCase() : data.role) as UserRole;
+
     // RBAC
-    if (data.role === UserRole.MANAGER) {
+    if (normalizedRole === UserRole.MANAGER) {
       authorize(currentUser, "staff:create:manager");
-    } else if (data.role === UserRole.RECEPTIONIST || data.role === UserRole.HOUSEKEEPER) {
+    } else if (normalizedRole === UserRole.RECEPTIONIST || normalizedRole === UserRole.HOUSEKEEPER) {
       authorize(currentUser, "staff:create:staff");
     } else {
       throw new ApiError(400, "Invalid role for staff creation");
@@ -42,7 +44,7 @@ export const UsersService = {
     
     const user = await UsersRepository.createUser(
       { id: crypto.randomUUID(), email: data.email, name: data.name, passwordHash },
-      data.role,
+      normalizedRole,
       currentUser.id
     );
 

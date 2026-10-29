@@ -15,8 +15,8 @@ export default function BookingsPage() {
   const bookings = resData?.data || [];
 
   const now = new Date();
-  const upcoming = bookings.filter(b => new Date(b.checkInDate) >= now || ["CONFIRMED", "PENDING_PAYMENT", "CHECKED_IN"].includes(b.status));
-  const past = bookings.filter(b => new Date(b.checkInDate) < now && !["CONFIRMED", "PENDING_PAYMENT", "CHECKED_IN"].includes(b.status));
+  const upcoming = bookings.filter((b: any) => new Date(b.checkInDate) >= now || ["CONFIRMED", "PENDING_PAYMENT", "CHECKED_IN"].includes(b.status));
+  const past = bookings.filter((b: any) => new Date(b.checkInDate) < now && !["CONFIRMED", "PENDING_PAYMENT", "CHECKED_IN"].includes(b.status));
 
   const renderList = (list: any[], title: string) => (
     <div className="mb-8">

@@ -60,7 +60,7 @@ export default function HousekeeperDashboard() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {rooms.map((room) => (
+        {rooms.map((room: Room) => (
           <div 
             key={room.id || room.roomNumber} 
             className="border rounded-xl p-5 shadow-sm bg-white flex flex-col justify-between"

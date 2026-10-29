@@ -30,11 +30,18 @@ export const UsersRepository = {
     role: UserRole,
     creatorId: string
   ) {
-    const roleRecord = await prisma.roles.findUnique({
+    let roleRecord = await prisma.roles.findUnique({
       where: { name: role },
     });
 
-    if (!roleRecord) throw new Error(`Role ${role} not found`);
+    if (!roleRecord) {
+      roleRecord = await prisma.roles.create({
+        data: {
+          id: crypto.randomUUID(),
+          name: role,
+        },
+      });
+    }
 
     const user = await prisma.$transaction(async (tx) => {
       const u = await tx.users.create({

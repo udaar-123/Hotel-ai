@@ -151,7 +151,7 @@ export default function RoomsPage() {
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-900 hover:file:bg-gray-200 cursor-pointer" 
                 />
                 {imageFile && <p className="text-xs text-gray-500 mt-2 truncate">{imageFile.name}</p>}
-                {editingId && <p className="text-[11px] text-gray-400 mt-1">Uploading an image here will add it to the room's gallery.</p>}
+                {editingId && <p className="text-[11px] text-gray-400 mt-1">Uploading an image here will add it to the room&apos;s gallery.</p>}
               </div>
 
               <div>

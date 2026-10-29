@@ -105,7 +105,7 @@ export default function AdminManagersPage() {
             ) : managers.length === 0 ? (
               <tr><td colSpan={4} className="p-4 text-center text-gray-500">No managers found</td></tr>
             ) : (
-              managers.map(m => (
+              managers.map((m: any) => (
                 <tr key={m.id} className="border-t border-gray-200/50">
                   <td className="p-4">{m.name}</td>
                   <td className="p-4">{m.email}</td>

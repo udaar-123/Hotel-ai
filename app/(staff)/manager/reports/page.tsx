@@ -6,19 +6,13 @@ import useSWR from "swr";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function ReportsPage() {
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [appliedDates, setAppliedDates] = useState<{start: string, end: string} | null>(null);
-
-  useEffect(() => {
-    // Set default to last 30 days
-    const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-
-    setEndDate(today.toISOString().split("T")[0]);
-    setStartDate(thirtyDaysAgo.toISOString().split("T")[0]);
-  }, []);
 
   const qs = appliedDates ? `?startDate=${appliedDates.start}&endDate=${appliedDates.end}` : null;
   const { data: occRes, isLoading: occLoading, mutate: mutateOcc } = useSWR(qs ? `/api/v1/reports/occupancy${qs}` : null, fetcher);

@@ -21,6 +21,22 @@ import {
   ClipboardList
 } from "lucide-react";
 
+function SidebarButton({ icon: Icon, label, onClick, active = false }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
+        active 
+        ? 'bg-gray-900 text-white shadow-md' 
+        : 'text-gray-600 hover:bg-white hover:shadow-sm hover:text-gray-900'
+      }`}
+    >
+      <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+      <span className="font-medium text-[14px]">{label}</span>
+    </button>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const fetchDashboardData = async () => {
@@ -78,20 +94,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const SidebarButton = ({ icon: Icon, label, onClick, active = false }: any) => (
-    <button 
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
-        active 
-        ? 'bg-gray-900 text-white shadow-md' 
-        : 'text-gray-600 hover:bg-white hover:shadow-sm hover:text-gray-900'
-      }`}
-    >
-      <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-      <span className="font-medium text-[14px]">{label}</span>
-    </button>
-  );
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#F9F8F4] via-[#F4F1EA] to-[#EAE5D9] flex text-gray-900 font-sans selection:bg-gray-900 selection:text-white">

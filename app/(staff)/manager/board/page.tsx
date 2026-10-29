@@ -63,7 +63,7 @@ export default function RoomBoardPage() {
         <p className="text-gray-500">Loading...</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {rooms.map(room => (
+          {rooms.map((room: any) => (
             <div key={room.id} className={`p-4 rounded-xl border ${getStatusColor(room.status)}`}>
               <div className="flex justify-between items-start mb-4">
                 <div>
