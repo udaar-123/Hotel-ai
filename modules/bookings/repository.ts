@@ -2,8 +2,75 @@ import { prisma } from "@/lib/prisma";
 import { BookingStatus, BookingSource } from "./types";
 import { Prisma } from "@prisma/client";
 
+const UNPAID_BOOKING_EXPIRY_MINUTES = 15;
+
+async function withSerializableRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      // P2034 is Prisma's code for transaction failed due to a write conflict or deadlock (Serializable isolation)
+      const isSerializationConflict =
+        error?.code === "P2034" ||
+        (typeof error?.message === "string" &&
+          (error.message.includes("could not serialize access") ||
+            error.message.includes("deadlock detected")));
+      if (!isSerializationConflict || attempt === maxRetries) {
+        throw error;
+      }
+      await new Promise((r) => setTimeout(r, 40 * attempt));
+    }
+  }
+  throw lastError;
+}
+
 export const BookingsRepository = {
+  /**
+   * Automatically cancels PENDING_PAYMENT bookings older than `expiryMinutes` (default 15 mins)
+   * that do not have a COMPLETED payment, releasing the held rooms back to inventory.
+   */
+  async expireStalePendingBookings(
+    hotelId?: string,
+    expiryMinutes: number = UNPAID_BOOKING_EXPIRY_MINUTES,
+    dbClient: Prisma.TransactionClient | typeof prisma = prisma
+  ) {
+    const cutoff = new Date(Date.now() - expiryMinutes * 60 * 1000);
+
+    const staleBookings = await dbClient.bookings.findMany({
+      where: {
+        ...(hotelId ? { hotelId } : {}),
+        status: BookingStatus.PENDING_PAYMENT,
+        createdAt: { lt: cutoff },
+        OR: [
+          { payments: { is: null } },
+          { payments: { is: { status: { not: "COMPLETED" } } } },
+        ],
+      },
+      select: { id: true, roomId: true },
+    });
+
+    if (staleBookings.length === 0) {
+      return { expiredCount: 0, bookingIds: [] as string[] };
+    }
+
+    const staleIds = staleBookings.map((b) => b.id);
+    await dbClient.bookings.updateMany({
+      where: { id: { in: staleIds } },
+      data: {
+        status: BookingStatus.CANCELLED,
+        updatedAt: new Date(),
+      },
+    });
+
+    return { expiredCount: staleIds.length, bookingIds: staleIds };
+  },
+
   async getAvailableRooms(hotelId: string, checkIn: Date, checkOut: Date, guests: number) {
+    // Release any expired PENDING_PAYMENT holds before checking availability
+    await this.expireStalePendingBookings(hotelId);
+
     // A room is available if it's ACTIVE, has enough capacity, and has NO overlapping bookings
     // that are in CONFIRMED, CHECKED_IN, or PENDING_PAYMENT status.
     const overlappingBookings = await prisma.bookings.findMany({
@@ -50,53 +117,68 @@ export const BookingsRepository = {
     source: string;
     createdByStaffId?: string;
   }) {
-    return prisma.$transaction(async (tx) => {
-      // Re-check availability with a lock or inside transaction to prevent race conditions
-      const overlapping = await tx.bookings.findFirst({
-        where: {
-          roomId: data.roomId,
-          status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN] },
-          OR: [
-            { checkInDate: { lt: data.checkOutDate }, checkOutDate: { gt: data.checkInDate } }
-          ]
-        }
-      });
+    return withSerializableRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          // 1. Acquire row-level lock on the target room so concurrent bookings for this room serialize
+          await tx.$queryRaw`SELECT id FROM rooms WHERE id = ${data.roomId} FOR UPDATE`;
 
-      if (overlapping) {
-        throw new Error("Room is no longer available for these dates");
-      }
+          // 2. Expire any stale unpaid bookings holding this hotel's rooms
+          await this.expireStalePendingBookings(data.hotelId, UNPAID_BOOKING_EXPIRY_MINUTES, tx);
 
-      const bookingId = crypto.randomUUID();
-      const booking = await tx.bookings.create({
-        data: {
-          id: bookingId,
-          hotelId: data.hotelId,
-          userId: data.userId,
-          roomId: data.roomId,
-          checkInDate: data.checkInDate,
-          checkOutDate: data.checkOutDate,
-          totalAmount: data.totalAmount,
-          status: BookingStatus.PENDING_PAYMENT,
-          source: data.source,
-          createdByStaffId: data.createdByStaffId,
-          guestCount: data.guests,
-          booking_guests: {
-            create: {
-              id: crypto.randomUUID(),
-              name: data.guestName,
-              email: data.guestEmail,
-              phone: data.guestPhone
+          // 3. Re-check availability inside Serializable transaction
+          const overlapping = await tx.bookings.findFirst({
+            where: {
+              roomId: data.roomId,
+              status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN] },
+              OR: [
+                { checkInDate: { lt: data.checkOutDate }, checkOutDate: { gt: data.checkInDate } }
+              ]
             }
-          }
-        },
-        include: {
-          booking_guests: true,
-          rooms: { include: { room_types: true } }
-        }
-      });
+          });
 
-      return booking;
-    }, { maxWait: 10000, timeout: 20000 });
+          if (overlapping) {
+            throw new Error("Room is no longer available for these dates");
+          }
+
+          const bookingId = crypto.randomUUID();
+          const booking = await tx.bookings.create({
+            data: {
+              id: bookingId,
+              hotelId: data.hotelId,
+              userId: data.userId,
+              roomId: data.roomId,
+              checkInDate: data.checkInDate,
+              checkOutDate: data.checkOutDate,
+              totalAmount: data.totalAmount,
+              status: BookingStatus.PENDING_PAYMENT,
+              source: data.source,
+              createdByStaffId: data.createdByStaffId,
+              guestCount: data.guests,
+              booking_guests: {
+                create: {
+                  id: crypto.randomUUID(),
+                  name: data.guestName,
+                  email: data.guestEmail,
+                  phone: data.guestPhone
+                }
+              }
+            },
+            include: {
+              booking_guests: true,
+              rooms: { include: { room_types: true } }
+            }
+          });
+
+          return booking;
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: 10000,
+          timeout: 20000,
+        }
+      )
+    );
   },
 
   async createOfflineBooking(data: {
@@ -113,61 +195,78 @@ export const BookingsRepository = {
     amountPaid: number;
     createdByStaffId: string;
   }) {
-    return prisma.$transaction(async (tx) => {
-      const overlapping = await tx.bookings.findFirst({
-        where: {
-          roomId: data.roomId,
-          status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN] },
-          OR: [
-            { checkInDate: { lt: data.checkOutDate }, checkOutDate: { gt: data.checkInDate } }
-          ]
-        }
-      });
+    return withSerializableRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          // 1. Acquire row-level lock on the target room
+          await tx.$queryRaw`SELECT id FROM rooms WHERE id = ${data.roomId} FOR UPDATE`;
 
-      if (overlapping) throw new Error("Room is no longer available for these dates");
+          // 2. Expire any stale unpaid bookings holding this hotel's rooms
+          await this.expireStalePendingBookings(data.hotelId, UNPAID_BOOKING_EXPIRY_MINUTES, tx);
 
-      const bookingId = crypto.randomUUID();
-      const booking = await tx.bookings.create({
-        data: {
-          id: bookingId,
-          hotelId: data.hotelId,
-          userId: data.userId, // We link to the Receptionist user ID initially, or create a guest user in a real system
-          roomId: data.roomId,
-          checkInDate: data.checkInDate,
-          checkOutDate: data.checkOutDate,
-          totalAmount: data.totalAmount,
-          status: BookingStatus.CONFIRMED,
-          source: BookingSource.OFFLINE,
-          createdByStaffId: data.createdByStaffId,
-          guestCount: data.guests,
-          booking_guests: {
-            create: {
-              id: crypto.randomUUID(),
-              name: data.guestName,
-              email: data.guestEmail,
-              phone: data.guestPhone
+          // 3. Re-check availability inside Serializable transaction
+          const overlapping = await tx.bookings.findFirst({
+            where: {
+              roomId: data.roomId,
+              status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN] },
+              OR: [
+                { checkInDate: { lt: data.checkOutDate }, checkOutDate: { gt: data.checkInDate } }
+              ]
             }
-          },
-          payments: {
-            create: {
-              id: crypto.randomUUID(),
-              amount: data.amountPaid,
-              status: data.amountPaid >= data.totalAmount ? "COMPLETED" : "PENDING",
-              method: "CASH"
+          });
+
+          if (overlapping) throw new Error("Room is no longer available for these dates");
+
+          const bookingId = crypto.randomUUID();
+          const booking = await tx.bookings.create({
+            data: {
+              id: bookingId,
+              hotelId: data.hotelId,
+              userId: data.userId,
+              roomId: data.roomId,
+              checkInDate: data.checkInDate,
+              checkOutDate: data.checkOutDate,
+              totalAmount: data.totalAmount,
+              status: BookingStatus.CONFIRMED,
+              source: BookingSource.OFFLINE,
+              createdByStaffId: data.createdByStaffId,
+              guestCount: data.guests,
+              booking_guests: {
+                create: {
+                  id: crypto.randomUUID(),
+                  name: data.guestName,
+                  email: data.guestEmail,
+                  phone: data.guestPhone
+                }
+              },
+              payments: {
+                create: {
+                  id: crypto.randomUUID(),
+                  amount: data.amountPaid,
+                  status: data.amountPaid >= data.totalAmount ? "COMPLETED" : "PENDING",
+                  method: "CASH"
+                }
+              }
+            },
+            include: {
+              booking_guests: true,
+              rooms: { include: { room_types: true } }
             }
-          }
+          });
+
+          return booking;
         },
-        include: {
-          booking_guests: true,
-          rooms: { include: { room_types: true } }
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: 10000,
+          timeout: 20000,
         }
-      });
-
-      return booking;
-    }, { maxWait: 10000, timeout: 20000 });
+      )
+    );
   },
 
   async getBookingsByUser(userId: string) {
+    await this.expireStalePendingBookings();
     return prisma.bookings.findMany({
       where: { userId },
       include: {
@@ -179,6 +278,7 @@ export const BookingsRepository = {
   },
 
   async getAllBookings(hotelId: string) {
+    await this.expireStalePendingBookings(hotelId);
     return prisma.bookings.findMany({
       where: { hotelId },
       include: {

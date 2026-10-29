@@ -17,6 +17,7 @@ import { AuditService } from '@/modules/audit/service';
 import { DashboardService } from '@/modules/dashboard/service';
 import { prisma } from '@/lib/prisma';
 import { startOfDay, endOfDay, subDays } from 'date-fns';
+import { checkRateLimit, getClientIdentifier, rateLimitExceededResponse } from '@/lib/rate-limit';
 
 function parseDateSafe(dateStr?: string, fallback: Date = new Date()): Date {
   if (!dateStr) return fallback;
@@ -40,6 +41,17 @@ export async function POST(req: Request) {
 
     const role = (session?.role || "GUEST") as UserRole | "GUEST";
     const userId = session?.userId || null;
+
+    // Enforce API rate limiting (35 AI turns / minute per user or IP)
+    const rateLimit = checkRateLimit(getClientIdentifier(req, userId), {
+      namespace: "ai-chat",
+      limit: 35,
+      windowMs: 60_000,
+    });
+    if (!rateLimit.allowed) {
+      return rateLimitExceededResponse(rateLimit, selectedLang);
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
 
     const hotel = await prisma.hotels.findFirst();
@@ -204,11 +216,12 @@ export async function POST(req: Request) {
         });
 
         tools.cancelMyBooking = tool({
-          description: 'Cancel an existing customer booking by bookingId.',
+          description: 'Cancel an existing customer booking by bookingId. Requires human confirmation if confirmed is not true.',
           inputSchema: z.object({
-            bookingId: z.string().describe("The UUID or short ID prefix of the booking to cancel")
+            bookingId: z.string().describe("The UUID or short ID prefix of the booking to cancel"),
+            confirmed: z.boolean().optional().describe("Set to true ONLY after the user explicitly confirms cancellation.")
           }),
-          execute: async ({ bookingId }) => {
+          execute: async ({ bookingId, confirmed }) => {
             try {
               let targetId = bookingId;
               if (bookingId.length < 36) {
@@ -216,6 +229,19 @@ export async function POST(req: Request) {
                   where: { userId, id: { startsWith: bookingId } }
                 });
                 if (found) targetId = found.id;
+              }
+              const existing = await BookingsService.getBookingById({ id: userId, role: "CUSTOMER" }, targetId);
+              if (!confirmed) {
+                return {
+                  requiresConfirmation: true,
+                  actionType: "CANCEL_BOOKING",
+                  titleEn: "Confirm Booking Cancellation",
+                  titleHi: "बुकिंग रद्दीकरण की पुष्टि करें",
+                  summaryEn: `Cancel Booking #${existing.id.slice(0, 8)} (Room ${existing.rooms?.roomNumber || "N/A"}, ₹${existing.totalAmount})?`,
+                  summaryHi: `क्या आप बुकिंग #${existing.id.slice(0, 8)} (कमरा ${existing.rooms?.roomNumber || "N/A"}, ₹${existing.totalAmount}) रद्द करना चाहते हैं?`,
+                  confirmPromptEn: `Yes, confirm cancelling booking ${existing.id} with confirmed=true`,
+                  confirmPromptHi: `हाँ, बुकिंग ${existing.id} को रद्द करने की पुष्टि करें (confirmed=true)`
+                };
               }
               const cancelled = await BookingsService.cancelBooking({ id: userId, role: "CUSTOMER" }, targetId);
               return { success: true, bookingId: cancelled.id, status: cancelled.status };
@@ -226,14 +252,27 @@ export async function POST(req: Request) {
         });
 
         tools.requestBookingRefund = tool({
-          description: "Request a refund for a completed payment on one of the customer's bookings.",
+          description: "Request a refund for a completed payment on one of the customer's bookings. Requires human confirmation if confirmed is not true.",
           inputSchema: z.object({
             bookingId: z.string().describe("The booking ID to request a refund for"),
-            reason: z.string().optional().describe("Reason for requesting the refund")
+            reason: z.string().optional().describe("Reason for requesting the refund"),
+            confirmed: z.boolean().optional().describe("Set to true ONLY after the user explicitly confirms the refund request.")
           }),
-          execute: async ({ bookingId, reason }) => {
+          execute: async ({ bookingId, reason, confirmed }) => {
             try {
               const booking = await BookingsService.getBookingById({ id: userId, role: "CUSTOMER" }, bookingId);
+              if (!confirmed) {
+                return {
+                  requiresConfirmation: true,
+                  actionType: "REQUEST_REFUND",
+                  titleEn: "Confirm Refund Request",
+                  titleHi: "रिफंड अनुरोध की पुष्टि करें",
+                  summaryEn: `Submit refund request of ₹${booking.totalAmount} for Booking #${booking.id.slice(0, 8)}?`,
+                  summaryHi: `क्या आप बुकिंग #${booking.id.slice(0, 8)} के लिए ₹${booking.totalAmount} का रिफंड अनुरोध भेजना चाहते हैं?`,
+                  confirmPromptEn: `Yes, confirm refund request for booking ${booking.id} with reason "${reason || 'Requested via AI'}" and confirmed=true`,
+                  confirmPromptHi: `हाँ, बुकिंग ${booking.id} के लिए रिफंड अनुरोध की पुष्टि करें (confirmed=true)`
+                };
+              }
               const refund = await PaymentsService.requestRefund(userId, booking.id, reason || "Customer requested refund via AI assistant");
               return { success: true, refundId: refund.id, amount: refund.amount, status: refund.status };
             } catch (e: any) {
@@ -466,16 +505,30 @@ export async function POST(req: Request) {
       });
 
       tools.checkOutGuest = tool({
-        description: 'Check out a guest from a CHECKED_IN booking by booking ID.',
+        description: 'Check out a guest from a CHECKED_IN booking by booking ID. Requires confirmation if confirmed is not true.',
         inputSchema: z.object({
-          bookingId: z.string().describe("Full UUID or short prefix of the booking ID")
+          bookingId: z.string().describe("Full UUID or short prefix of the booking ID"),
+          confirmed: z.boolean().optional().describe("Set to true ONLY after the user explicitly confirms check-out.")
         }),
-        execute: async ({ bookingId }) => {
+        execute: async ({ bookingId, confirmed }) => {
           try {
             let targetId = bookingId;
             if (bookingId.length < 36) {
               const found = await prisma.bookings.findFirst({ where: { hotelId, id: { startsWith: bookingId } } });
               if (found) targetId = found.id;
+            }
+            const existing = await BookingsService.getBookingById({ id: userId!, role }, targetId);
+            if (!confirmed) {
+              return {
+                requiresConfirmation: true,
+                actionType: "CHECK_OUT_GUEST",
+                titleEn: "Confirm Guest Check-Out",
+                titleHi: "गेस्ट चेक-आउट की पुष्टि करें",
+                summaryEn: `Check out Guest (${existing.booking_guests?.[0]?.name || "Guest"}) from Room ${existing.rooms?.roomNumber || "N/A"}?`,
+                summaryHi: `क्या आप कमरा ${existing.rooms?.roomNumber || "N/A"} से गेस्ट (${existing.booking_guests?.[0]?.name || "Guest"}) को चेक-आउट करना चाहते हैं?`,
+                confirmPromptEn: `Yes, confirm checking out booking ${existing.id} with confirmed=true`,
+                confirmPromptHi: `हाँ, बुकिंग ${existing.id} को चेक-आउट करने की पुष्टि करें (confirmed=true)`
+              };
             }
             const updated = await BookingsService.checkOut({ id: userId!, role }, targetId);
             return {
@@ -483,6 +536,26 @@ export async function POST(req: Request) {
               bookingId: updated.id,
               status: updated.status,
               roomNumber: updated.rooms?.roomNumber
+            };
+          } catch (e: any) {
+            return { error: e.message };
+          }
+        }
+      });
+
+      tools.releaseExpiredUnpaidBookings = tool({
+        description: 'Automatically release and cancel stale PENDING_PAYMENT bookings that have remained unpaid past the expiry window (default 15 minutes).',
+        inputSchema: z.object({
+          expiryMinutes: z.number().optional().describe("Optional expiry threshold in minutes (default 15)")
+        }),
+        execute: async ({ expiryMinutes }) => {
+          try {
+            const res = await BookingsService.expireStalePendingBookings(hotelId, expiryMinutes || 15);
+            return {
+              success: true,
+              expiredCount: res.expiredCount,
+              bookingIds: res.bookingIds,
+              message: `Released ${res.expiredCount} expired unpaid booking(s).`
             };
           } catch (e: any) {
             return { error: e.message };
@@ -767,21 +840,36 @@ export async function POST(req: Request) {
       });
 
       tools.toggleStaffStatus = tool({
-        description: 'Activate or deactivate a staff member by user ID or email.',
+        description: 'Activate or deactivate a staff member by user ID or email. Deactivating requires confirmation if confirmed is not true.',
         inputSchema: z.object({
           staffIdentifier: z.string().optional().describe("Staff user UUID or email address"),
           email: z.string().optional().describe("Alias for staffIdentifier"),
-          deactivated: z.boolean().describe("Set true to deactivate, false to activate")
+          deactivated: z.boolean().describe("Set true to deactivate, false to activate"),
+          confirmed: z.boolean().optional().describe("Set to true ONLY after the user explicitly confirms staff deactivation.")
         }),
         execute: async (args) => {
           try {
             const identifier = args?.staffIdentifier || args?.email;
             if (!identifier) return { error: "Please provide the staff member's email or ID." };
             let targetId = identifier;
+            let staffDisplay = identifier;
             if (identifier.includes("@")) {
               const found = await prisma.users.findUnique({ where: { email: identifier } });
               if (!found) return { error: `No staff found with email ${identifier}` };
               targetId = found.id;
+              staffDisplay = `${found.name || found.email} (${found.email})`;
+            }
+            if (Boolean(args?.deactivated) && !args?.confirmed) {
+              return {
+                requiresConfirmation: true,
+                actionType: "DEACTIVATE_STAFF",
+                titleEn: "Confirm Staff Deactivation",
+                titleHi: "स्टाफ निष्क्रिय करने की पुष्टि करें",
+                summaryEn: `Deactivate staff account for ${staffDisplay}? They will immediately lose system access.`,
+                summaryHi: `क्या आप ${staffDisplay} का स्टाफ अकाउंट निष्क्रिय (Deactivate) करना चाहते हैं?`,
+                confirmPromptEn: `Yes, confirm deactivating staff ${identifier} with confirmed=true`,
+                confirmPromptHi: `हाँ, स्टाफ ${identifier} को निष्क्रिय करने की पुष्टि करें (confirmed=true)`
+              };
             }
             const updated = await UsersService.updateStaff(
               { id: userId!, role: role as UserRole },
@@ -884,13 +972,26 @@ export async function POST(req: Request) {
       });
 
       tools.processRefundRequest = tool({
-        description: 'Approve or reject a pending refund request by refundId.',
+        description: 'Approve or reject a pending refund request by refundId. Requires human confirmation if confirmed is not true.',
         inputSchema: z.object({
           refundId: z.string().describe("The UUID of the refund request"),
-          action: z.enum(["APPROVE", "REJECT"]).describe("APPROVE or REJECT")
+          action: z.enum(["APPROVE", "REJECT"]).describe("APPROVE or REJECT"),
+          confirmed: z.boolean().optional().describe("Set to true ONLY after the user explicitly confirms approving or rejecting the refund.")
         }),
-        execute: async ({ refundId, action }) => {
+        execute: async ({ refundId, action, confirmed }) => {
           try {
+            if (!confirmed) {
+              return {
+                requiresConfirmation: true,
+                actionType: "PROCESS_REFUND",
+                titleEn: `Confirm Refund ${action === "APPROVE" ? "Approval" : "Rejection"}`,
+                titleHi: `रिफंड ${action === "APPROVE" ? "स्वीकृति" : "अस्वीकृति"} की पुष्टि करें`,
+                summaryEn: `Are you sure you want to ${action} Refund #${refundId.slice(0, 8)}?`,
+                summaryHi: `क्या आप वाकई रिफंड #${refundId.slice(0, 8)} को ${action === "APPROVE" ? "स्वीकृत (Approve)" : "अस्वीकृत (Reject)"} करना चाहते हैं?`,
+                confirmPromptEn: `Yes, confirm ${action} for refund ${refundId} with confirmed=true`,
+                confirmPromptHi: `हाँ, रिफंड ${refundId} को ${action} करने की पुष्टि करें (confirmed=true)`
+              };
+            }
             const res = await PaymentsService.processRefund(refundId, action, userId!);
             return { success: true, refundId: res.id, status: res.status, amount: res.amount };
           } catch (e: any) {

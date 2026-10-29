@@ -195,5 +195,9 @@ export const BookingsService = {
     }
 
     return BookingsRepository.addIdentityDocument(bookingId, url, publicId, type);
+  },
+
+  async expireStalePendingBookings(hotelId?: string, expiryMinutes: number = 15) {
+    return BookingsRepository.expireStalePendingBookings(hotelId, expiryMinutes);
   }
 };

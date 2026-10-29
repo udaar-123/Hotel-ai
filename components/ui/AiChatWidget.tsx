@@ -2,9 +2,44 @@
 "use client";
 import { useChat } from '@ai-sdk/react';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { X, ArrowUp, Loader2, Sparkles, Mic, MicOff, Volume2, VolumeX, Square } from 'lucide-react';
+import {
+  X,
+  ArrowUp,
+  Loader2,
+  Sparkles,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Square,
+  Trash2,
+  ShieldAlert,
+  Check,
+} from 'lucide-react';
 
 type SupportedLanguage = 'en-IN' | 'hi-IN';
+
+const LOCAL_STORAGE_KEY = 'hotel_ai_chat_history_v1';
+
+// Clean markdown characters before speaking aloud
+function cleanTextForSpeech(raw: string): string {
+  return raw
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/[*#_`~>|]/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Split text into sentences for low-latency Sentence-Streaming TTS
+function splitIntoSentences(raw: string): string[] {
+  const cleaned = cleanTextForSpeech(raw);
+  if (!cleaned) return [];
+  return cleaned
+    .split(/(?<=[।.!?\n])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 1);
+}
 
 export function AiChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,6 +51,8 @@ export function AiChatWidget() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [resolvedConfirmations, setResolvedConfirmations] = useState<Record<string, 'confirmed' | 'cancelled'>>({});
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -27,11 +64,15 @@ export function AiChatWidget() {
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const speakAbortRef = useRef<AbortController | null>(null);
   const speakTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const speechSessionIdRef = useRef<number>(0);
   const lastSpokenMessageIdRef = useRef<string | null>(null);
+  const streamedSentenceCountRef = useRef<Record<string, number>>({});
+  const sentenceQueueRef = useRef<Array<{ text: string; lang: SupportedLanguage; sessionId: number }>>([]);
+  const isProcessingQueueRef = useRef<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { messages, sendMessage, status, error, regenerate } = useChat({
-    maxToolRoundtrips: 3
+  const { messages, setMessages, sendMessage, status, error, regenerate } = useChat({
+    maxToolRoundtrips: 3,
   });
 
   const isLoading = status === 'in_progress' || status === 'streaming' || status === 'submitted';
@@ -53,17 +94,11 @@ export function AiChatWidget() {
     return '';
   }, []);
 
-  // Clean markdown characters before speaking aloud
-  const cleanTextForSpeech = (raw: string): string => {
-    return raw
-      .replace(/```[\s\S]*?```/g, '')
-      .replace(/[*#_`~>|]/g, ' ')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
-
   const stopSpeaking = useCallback(() => {
+    speechSessionIdRef.current += 1;
+    sentenceQueueRef.current = [];
+    isProcessingQueueRef.current = false;
+
     if (speakAbortRef.current) {
       speakAbortRef.current.abort();
       speakAbortRef.current = null;
@@ -86,104 +121,257 @@ export function AiChatWidget() {
     setIsSpeaking(false);
   }, []);
 
-  const speakWithBrowserFallback = useCallback((spokenText: string, targetLang: SupportedLanguage) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      setIsSpeaking(false);
-      return;
-    }
-    window.speechSynthesis.cancel();
-
-    speakTimeoutRef.current = setTimeout(() => {
-      const utterance = new SpeechSynthesisUtterance(spokenText);
-      utteranceRef.current = utterance;
-      utterance.lang = targetLang;
-      utterance.rate = 1.0;
-
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        const exactMatch =
-          voices.find((v) => v.lang.toLowerCase() === targetLang.toLowerCase()) ||
-          voices.find((v) =>
-            targetLang === 'hi-IN'
-              ? v.lang.toLowerCase().startsWith('hi') || v.name.toLowerCase().includes('hindi')
-              : v.lang.toLowerCase().startsWith('en-in') || v.lang.toLowerCase().startsWith('en')
-          );
-        if (exactMatch) {
-          utterance.voice = exactMatch;
+  const playSingleSentenceWithBrowser = useCallback(
+    (spokenText: string, targetLang: SupportedLanguage, sessionId: number): Promise<void> => {
+      return new Promise((resolve) => {
+        if (
+          typeof window === 'undefined' ||
+          !('speechSynthesis' in window) ||
+          speechSessionIdRef.current !== sessionId
+        ) {
+          resolve();
+          return;
         }
-      }
 
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        utteranceRef.current = null;
-        setIsSpeaking(false);
-      };
-      utterance.onerror = () => {
-        utteranceRef.current = null;
-        setIsSpeaking(false);
-      };
+        window.speechSynthesis.cancel();
+        speakTimeoutRef.current = setTimeout(() => {
+          if (speechSessionIdRef.current !== sessionId) {
+            resolve();
+            return;
+          }
+          const utterance = new SpeechSynthesisUtterance(spokenText);
+          utteranceRef.current = utterance;
+          utterance.lang = targetLang;
+          utterance.rate = 1.0;
 
-      window.speechSynthesis.speak(utterance);
-    }, 80);
-  }, []);
+          const voices = window.speechSynthesis.getVoices();
+          if (voices.length > 0) {
+            const exactMatch =
+              voices.find((v) => v.lang.toLowerCase() === targetLang.toLowerCase()) ||
+              voices.find((v) =>
+                targetLang === 'hi-IN'
+                  ? v.lang.toLowerCase().startsWith('hi') || v.name.toLowerCase().includes('hindi')
+                  : v.lang.toLowerCase().startsWith('en-in') || v.lang.toLowerCase().startsWith('en')
+              );
+            if (exactMatch) {
+              utterance.voice = exactMatch;
+            }
+          }
 
-  const speakText = useCallback(async (rawText: string, preferredLang: SupportedLanguage) => {
-    if (typeof window === 'undefined') return;
-    const text = cleanTextForSpeech(rawText);
-    if (!text) return;
+          utterance.onstart = () => setIsSpeaking(true);
+          utterance.onend = () => {
+            utteranceRef.current = null;
+            resolve();
+          };
+          utterance.onerror = () => {
+            utteranceRef.current = null;
+            resolve();
+          };
 
-    stopSpeaking();
+          window.speechSynthesis.speak(utterance);
+        }, 50);
+      });
+    },
+    []
+  );
 
-    const controller = new AbortController();
-    speakAbortRef.current = controller;
+  // Process the Sentence-Streaming TTS queue sequentially while pre-fetching the next sentence in parallel
+  const processSentenceQueue = useCallback(async () => {
+    if (isProcessingQueueRef.current) return;
+    isProcessingQueueRef.current = true;
     setIsSpeaking(true);
 
-    try {
+    const fetchSentenceAudio = async (item: { text: string; lang: SupportedLanguage; sessionId: number }) => {
+      const controller = new AbortController();
+      speakAbortRef.current = controller;
       const res = await fetch('/api/voice/speak', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, language: preferredLang }),
+        body: JSON.stringify({ text: item.text, language: item.lang }),
         signal: controller.signal,
       });
+      if (!res.ok) return null;
+      return res.json();
+    };
 
-      if (!res.ok) {
-        speakWithBrowserFallback(text, preferredLang);
-        return;
+    try {
+      let prefetchedPromise: Promise<any> | null = null;
+      let prefetchedKey: string | null = null;
+
+      while (sentenceQueueRef.current.length > 0) {
+        const current = sentenceQueueRef.current.shift()!;
+        if (speechSessionIdRef.current !== current.sessionId) break;
+
+        const currentKey = `${current.sessionId}:${current.lang}:${current.text}`;
+        const dataPromise =
+          prefetchedPromise && prefetchedKey === currentKey
+            ? prefetchedPromise
+            : fetchSentenceAudio(current).catch(() => null);
+
+        // Pre-fetch the next sentence in the queue while the current one is resolving/playing
+        const nextItem = sentenceQueueRef.current[0];
+        if (nextItem && nextItem.sessionId === current.sessionId) {
+          prefetchedKey = `${nextItem.sessionId}:${nextItem.lang}:${nextItem.text}`;
+          prefetchedPromise = fetchSentenceAudio(nextItem).catch(() => null);
+        } else {
+          prefetchedKey = null;
+          prefetchedPromise = null;
+        }
+
+        const data = await dataPromise;
+        if (speechSessionIdRef.current !== current.sessionId) break;
+
+        const spokenText = data?.spokenText || current.text;
+        const targetLang: SupportedLanguage = data?.language === 'hi-IN' ? 'hi-IN' : current.lang;
+
+        if (data?.audioBase64) {
+          await new Promise<void>((resolve) => {
+            if (speechSessionIdRef.current !== current.sessionId) {
+              resolve();
+              return;
+            }
+            const audio = new Audio(`data:audio/mp3;base64,${data.audioBase64}`);
+            audioPlayerRef.current = audio;
+            setIsSpeaking(true);
+
+            audio.onended = () => {
+              audioPlayerRef.current = null;
+              resolve();
+            };
+            audio.onerror = async () => {
+              audioPlayerRef.current = null;
+              await playSingleSentenceWithBrowser(spokenText, targetLang, current.sessionId);
+              resolve();
+            };
+
+            audio.play().catch(async () => {
+              audioPlayerRef.current = null;
+              await playSingleSentenceWithBrowser(spokenText, targetLang, current.sessionId);
+              resolve();
+            });
+          });
+        } else {
+          await playSingleSentenceWithBrowser(spokenText, targetLang, current.sessionId);
+        }
+      }
+    } finally {
+      isProcessingQueueRef.current = false;
+      if (sentenceQueueRef.current.length === 0) {
+        setIsSpeaking(false);
+      }
+    }
+  }, [playSingleSentenceWithBrowser]);
+
+  const enqueueSentencesForSpeech = useCallback(
+    (sentences: string[], preferredLang: SupportedLanguage, resetExisting = false) => {
+      if (typeof window === 'undefined' || sentences.length === 0) return;
+
+      if (resetExisting) {
+        stopSpeaking();
       }
 
-      const data = await res.json();
-      if (controller.signal.aborted) return;
-
-      const spokenText = data.spokenText || text;
-      const targetLang: SupportedLanguage = data.language === 'hi-IN' ? 'hi-IN' : 'en-IN';
-
-      if (data.audioBase64) {
-        const audio = new Audio(`data:audio/mp3;base64,${data.audioBase64}`);
-        audioPlayerRef.current = audio;
-
-        audio.onended = () => {
-          audioPlayerRef.current = null;
-          setIsSpeaking(false);
-        };
-        audio.onerror = () => {
-          audioPlayerRef.current = null;
-          speakWithBrowserFallback(spokenText, targetLang);
-        };
-
-        try {
-          await audio.play();
-          return;
-        } catch {
-          audioPlayerRef.current = null;
+      const activeSessionId = speechSessionIdRef.current;
+      for (const s of sentences) {
+        const cleaned = cleanTextForSpeech(s);
+        if (cleaned) {
+          sentenceQueueRef.current.push({
+            text: cleaned,
+            lang: preferredLang,
+            sessionId: activeSessionId,
+          });
         }
       }
 
-      speakWithBrowserFallback(spokenText, targetLang);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      speakWithBrowserFallback(text, preferredLang);
+      if (sentenceQueueRef.current.length > 0) {
+        processSentenceQueue();
+      }
+    },
+    [stopSpeaking, processSentenceQueue]
+  );
+
+  const speakText = useCallback(
+    (rawText: string, preferredLang: SupportedLanguage) => {
+      const sentences = splitIntoSentences(rawText);
+      if (sentences.length === 0) return;
+      enqueueSentencesForSpeech(sentences, preferredLang, true);
+    },
+    [enqueueSentencesForSpeech]
+  );
+
+  // 1. Load Persistent Chat History from Prisma (/api/chat/history) or localStorage on mount
+  useEffect(() => {
+    let mounted = true;
+    async function loadPersistedHistory() {
+      try {
+        const res = await fetch('/api/chat/history');
+        if (res.ok) {
+          const data = await res.json();
+          if (mounted && Array.isArray(data.messages) && data.messages.length > 0) {
+            setMessages(data.messages);
+            const last = data.messages[data.messages.length - 1];
+            if (last?.id) lastSpokenMessageIdRef.current = last.id;
+            setHistoryLoaded(true);
+            return;
+          }
+        }
+      } catch {}
+
+      // Fallback to localStorage for guest sessions
+      try {
+        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (cached && mounted) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+            const last = parsed[parsed.length - 1];
+            if (last?.id) lastSpokenMessageIdRef.current = last.id;
+          }
+        }
+      } catch {}
+      if (mounted) setHistoryLoaded(true);
     }
-  }, [stopSpeaking, speakWithBrowserFallback]);
+
+    loadPersistedHistory();
+    return () => {
+      mounted = false;
+    };
+  }, [setMessages]);
+
+  // 2. Save Persistent Chat History to Prisma + localStorage whenever turn finishes
+  useEffect(() => {
+    if (!historyLoaded || isLoading || messages.length === 0) return;
+
+    const visibleMessages = messages.filter(
+      (m: any) =>
+        !['Please summarize the results.', 'कृपया परिणामों का हिंदी में संक्षिप्त विवरण दें।'].includes(
+          getMessageText(m)
+        )
+    );
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(visibleMessages.slice(-40)));
+    } catch {}
+
+    fetch('/api/chat/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: visibleMessages.slice(-40) }),
+    }).catch(() => {});
+  }, [messages, isLoading, historyLoaded, getMessageText]);
+
+  const handleClearChatHistory = async () => {
+    stopSpeaking();
+    setMessages([]);
+    setResolvedConfirmations({});
+    lastSpokenMessageIdRef.current = null;
+    streamedSentenceCountRef.current = {};
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+    } catch {}
+    try {
+      await fetch('/api/chat/history', { method: 'DELETE' });
+    } catch {}
+  };
 
   // Ensure browser voices are loaded on mount
   useEffect(() => {
@@ -208,14 +396,31 @@ export function AiChatWidget() {
     };
   }, []);
 
-  // Auto-regenerate if the LLM drops the text response after a tool call, and auto-speak finished assistant replies
+  // Live Sentence-Streaming TTS while the assistant is streaming text + final completion check
   useEffect(() => {
-    if (!isLoading && messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
-      const msgText = getMessageText(lastMsg);
+    if (!historyLoaded || messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role !== 'assistant') return;
 
+    const msgText = getMessageText(lastMsg);
+
+    // While streaming, speak completed sentences immediately (all sentences except the last still-growing fragment)
+    if (isLoading && voiceEnabled && msgText.trim()) {
+      const sentences = splitIntoSentences(msgText);
+      const completedSentenceCount = Math.max(0, sentences.length - 1);
+      const alreadySpokenCount = streamedSentenceCountRef.current[lastMsg.id] || 0;
+
+      if (completedSentenceCount > alreadySpokenCount) {
+        const newSentences = sentences.slice(alreadySpokenCount, completedSentenceCount);
+        streamedSentenceCountRef.current[lastMsg.id] = completedSentenceCount;
+        enqueueSentencesForSpeech(newSentences, language, false);
+      }
+      return;
+    }
+
+    // When streaming finishes
+    if (!isLoading) {
       if (
-        lastMsg.role === 'assistant' &&
         !msgText.trim() &&
         ((lastMsg.toolInvocations && lastMsg.toolInvocations.length > 0) ||
           lastMsg.parts?.some((p: any) => p.type?.startsWith('tool')))
@@ -235,21 +440,33 @@ export function AiChatWidget() {
         return;
       }
 
-      if (
-        voiceEnabled &&
-        lastMsg.role === 'assistant' &&
-        msgText.trim() &&
-        lastSpokenMessageIdRef.current !== lastMsg.id
-      ) {
+      if (voiceEnabled && msgText.trim() && lastSpokenMessageIdRef.current !== lastMsg.id) {
         lastSpokenMessageIdRef.current = lastMsg.id;
-        speakText(msgText, language);
+        const sentences = splitIntoSentences(msgText);
+        const alreadySpokenCount = streamedSentenceCountRef.current[lastMsg.id] || 0;
+        const remainingSentences = sentences.slice(alreadySpokenCount);
+        streamedSentenceCountRef.current[lastMsg.id] = sentences.length;
+
+        if (remainingSentences.length > 0) {
+          enqueueSentencesForSpeech(remainingSentences, language, alreadySpokenCount === 0);
+        }
       }
     }
-  }, [messages, isLoading, regenerate, sendMessage, language, voiceEnabled, getMessageText, speakText]);
+  }, [
+    messages,
+    isLoading,
+    historyLoaded,
+    regenerate,
+    sendMessage,
+    language,
+    voiceEnabled,
+    getMessageText,
+    enqueueSentencesForSpeech,
+  ]);
 
   // Auto-scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const submitUserMessage = useCallback(
@@ -304,7 +521,6 @@ export function AiChatWidget() {
       recordingTimerRef.current = null;
     }
 
-    // Stop optional live SpeechRecognition preview
     if (recognitionRef.current) {
       try {
         recognitionRef.current.onend = null;
@@ -327,8 +543,6 @@ export function AiChatWidget() {
           return;
         }
 
-        // If browser live SpeechRecognition already captured clear text, send it immediately;
-        // otherwise transcribe the recorded audio via Groq Whisper (/api/voice/transcribe)
         const capturedText = (liveTranscriptRef.current || input).trim();
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         audioChunksRef.current = [];
@@ -382,7 +596,6 @@ export function AiChatWidget() {
     setVoiceError(null);
     stopSpeaking();
 
-    // If currently listening, clicking the mic button stops recording and submits
     if (isListening) {
       await stopVoiceRecording(true);
       return;
@@ -402,7 +615,7 @@ export function AiChatWidget() {
       };
 
       mediaRecorderRef.current = recorder;
-      recorder.start(250); // Collect audio chunks every 250ms so it stays open until user stops it
+      recorder.start(250);
       setIsListening(true);
       setRecordingSeconds(0);
 
@@ -410,7 +623,6 @@ export function AiChatWidget() {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
 
-      // Optional live preview via Web Speech API (never allowed to prematurely close the recording!)
       const SpeechRecognitionAPI =
         typeof window !== 'undefined'
           ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -419,7 +631,7 @@ export function AiChatWidget() {
       if (SpeechRecognitionAPI) {
         try {
           const recognition = new SpeechRecognitionAPI();
-          recognition.lang = language; // 'en-IN' or 'hi-IN'
+          recognition.lang = language;
           recognition.interimResults = true;
           recognition.continuous = true;
 
@@ -435,15 +647,12 @@ export function AiChatWidget() {
             }
           };
 
-          // Ignore SpeechRecognition auto-end or network hiccups; MediaRecorder keeps recording until user stops!
           recognition.onerror = () => {};
           recognition.onend = () => {};
 
           recognitionRef.current = recognition;
           recognition.start();
-        } catch {
-          // Ignore if SpeechRecognition fails; MediaRecorder + Groq Whisper is active
-        }
+        } catch {}
       }
     } catch {
       cleanupRecordingResources();
@@ -462,9 +671,34 @@ export function AiChatWidget() {
     return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
   };
 
+  // Extract any Human-in-the-Loop (HITL) confirmation payloads from a message's tool outputs
+  const extractHitlPayloads = (m: any) => {
+    const items: Array<{ key: string; payload: any }> = [];
+
+    if (Array.isArray(m?.toolInvocations)) {
+      m.toolInvocations.forEach((ti: any, idx: number) => {
+        const res = ti?.result;
+        if (res && res.requiresConfirmation) {
+          items.push({ key: `${m.id}-ti-${idx}`, payload: res });
+        }
+      });
+    }
+
+    if (Array.isArray(m?.parts)) {
+      m.parts.forEach((part: any, idx: number) => {
+        const out = part?.output ?? part?.result;
+        if (out && out.requiresConfirmation) {
+          items.push({ key: `${m.id}-part-${idx}`, payload: out });
+        }
+      });
+    }
+
+    return items;
+  };
+
   const hiddenAutoPrompts = [
-    "Please summarize the results.",
-    "कृपया परिणामों का हिंदी में संक्षिप्त विवरण दें।"
+    'Please summarize the results.',
+    'कृपया परिणामों का हिंदी में संक्षिप्त विवरण दें।',
   ];
 
   return (
@@ -480,12 +714,14 @@ export function AiChatWidget() {
                   {language === 'hi-IN' ? 'AI वॉइस असिस्टेंट' : 'AI Voice Assistant'}
                 </h3>
                 <p className="text-[10px] text-gray-400 font-medium">
-                  {language === 'hi-IN' ? 'हिंदी और अंग्रेज़ी (Hindi & English)' : 'English & Hindi Voice Agent'}
+                  {language === 'hi-IN'
+                    ? 'हिंदी और अंग्रेज़ी (Streaming Voice)'
+                    : 'English & Hindi Streaming Voice'}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               {/* Language Switcher: Strictly EN (en-IN) & HI (hi-IN) */}
               <div className="flex items-center bg-gray-100 rounded-full p-0.5 text-[11px] font-semibold">
                 <button
@@ -494,7 +730,7 @@ export function AiChatWidget() {
                     stopSpeaking();
                     setLanguage('en-IN');
                   }}
-                  className={`px-2.5 py-1 rounded-full transition-all ${
+                  className={`px-2 py-1 rounded-full transition-all ${
                     language === 'en-IN'
                       ? 'bg-gray-900 text-white shadow-xs'
                       : 'text-gray-600 hover:text-gray-900'
@@ -509,7 +745,7 @@ export function AiChatWidget() {
                     stopSpeaking();
                     setLanguage('hi-IN');
                   }}
-                  className={`px-2.5 py-1 rounded-full transition-all ${
+                  className={`px-2 py-1 rounded-full transition-all ${
                     language === 'hi-IN'
                       ? 'bg-gray-900 text-white shadow-xs'
                       : 'text-gray-600 hover:text-gray-900'
@@ -557,6 +793,18 @@ export function AiChatWidget() {
                 {voiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
               </button>
 
+              {/* Clear Persistent Chat History */}
+              {messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearChatHistory}
+                  className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  title={language === 'hi-IN' ? 'चैट इतिहास साफ़ करें' : 'Clear chat history'}
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -593,6 +841,8 @@ export function AiChatWidget() {
               .filter((m: any) => !hiddenAutoPrompts.includes(getMessageText(m)))
               .map((m: any) => {
                 const msgText = getMessageText(m);
+                const hitlItems = m.role === 'assistant' ? extractHitlPayloads(m) : [];
+
                 return (
                   <div key={m.id} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div
@@ -639,6 +889,70 @@ export function AiChatWidget() {
                           </div>
                         ))}
 
+                      {/* Human-in-the-Loop (HITL) Confirmation Cards */}
+                      {hitlItems.map(({ key, payload }) => {
+                        const statusDecision = resolvedConfirmations[key];
+                        const title = language === 'hi-IN' ? payload.titleHi || payload.titleEn : payload.titleEn;
+                        const summary =
+                          language === 'hi-IN' ? payload.summaryHi || payload.summaryEn : payload.summaryEn;
+                        const confirmPrompt =
+                          language === 'hi-IN'
+                            ? payload.confirmPromptHi || payload.confirmPromptEn
+                            : payload.confirmPromptEn;
+
+                        return (
+                          <div
+                            key={key}
+                            className="mt-3 p-3 rounded-xl bg-amber-50/90 border border-amber-200 text-gray-900 space-y-2.5"
+                          >
+                            <div className="flex items-center gap-1.5 text-amber-800 font-semibold text-xs">
+                              <ShieldAlert size={15} className="shrink-0" />
+                              <span>{title}</span>
+                            </div>
+                            <p className="text-xs text-gray-700 leading-relaxed">{summary}</p>
+
+                            {statusDecision ? (
+                              <div className="text-[11px] font-semibold flex items-center gap-1 pt-1 text-gray-600">
+                                <Check size={13} />
+                                <span>
+                                  {statusDecision === 'confirmed'
+                                    ? language === 'hi-IN'
+                                      ? 'पुष्टि की गई (Confirmed)'
+                                    : 'Confirmed'
+                                    : language === 'hi-IN'
+                                    ? 'रद्द किया गया (Cancelled)'
+                                    : 'Cancelled'}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={() => {
+                                    setResolvedConfirmations((prev) => ({ ...prev, [key]: 'confirmed' }));
+                                    submitUserMessage(confirmPrompt);
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-800 transition-colors disabled:opacity-40"
+                                >
+                                  {language === 'hi-IN' ? 'पुष्टि करें (Confirm)' : 'Confirm'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={() => {
+                                    setResolvedConfirmations((prev) => ({ ...prev, [key]: 'cancelled' }));
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-white border border-gray-300 text-gray-700 text-xs font-medium hover:bg-gray-100 transition-colors disabled:opacity-40"
+                                >
+                                  {language === 'hi-IN' ? 'रद्द करें (Cancel)' : 'Cancel'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
                       {/* Per-message Listen button for assistant responses */}
                       {m.role === 'assistant' && msgText && (
                         <div className="mt-2 pt-1.5 border-t border-gray-100 flex justify-end">
@@ -658,7 +972,7 @@ export function AiChatWidget() {
                 );
               })}
 
-            {isLoading && messages[messages.length - 1]?.role === "user" && (
+            {isLoading && messages[messages.length - 1]?.role === 'user' && (
               <div className="flex justify-start">
                 <div className="bg-white text-gray-500 rounded-2xl px-4 py-3 text-[14px] rounded-tl-sm border border-gray-200 shadow-sm flex items-center gap-2">
                   <span className="flex gap-1">
@@ -673,7 +987,7 @@ export function AiChatWidget() {
             {(error || voiceError) && (
               <div className="flex justify-center my-2">
                 <div className="bg-red-50 text-red-500 text-xs px-3 py-2 rounded-lg border border-red-100 max-w-[90%] text-center">
-                  {voiceError || error?.message || "Failed to connect to AI server."}
+                  {voiceError || error?.message || 'Failed to connect to AI server.'}
                 </div>
               </div>
             )}

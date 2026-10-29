@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit, getClientIdentifier, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const audioFile = formData.get("audio") as File | null;
     const rawLang = (formData.get("language") as string) || "en-IN";
+
+    const rateLimit = checkRateLimit(getClientIdentifier(req), {
+      namespace: "voice-stt",
+      limit: 25,
+      windowMs: 60_000,
+    });
+    if (!rateLimit.allowed) {
+      return rateLimitExceededResponse(rateLimit, rawLang);
+    }
 
     if (!audioFile) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 });

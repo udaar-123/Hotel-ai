@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "ai";
 import { groq } from "@ai-sdk/groq";
+import { checkRateLimit, getClientIdentifier, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 function splitIntoChunks(text: string, maxLen = 160): string[] {
   const sentences = text
@@ -47,6 +48,14 @@ export async function POST(req: NextRequest) {
     }
 
     const targetLang = language === "hi-IN" ? "hi-IN" : "en-IN";
+    const rateLimit = checkRateLimit(getClientIdentifier(req), {
+      namespace: "voice-tts",
+      limit: 60,
+      windowMs: 60_000,
+    });
+    if (!rateLimit.allowed) {
+      return rateLimitExceededResponse(rateLimit, targetLang);
+    }
     const cleaned = text
       .replace(/```[\s\S]*?```/g, "")
       .replace(/[*#_`~>|]/g, " ")
